@@ -16,7 +16,7 @@ class HeroSectionSeeder extends Seeder
             [
                 'title' => 'معاً نصنع فرقاً... ونمنح الأمل لمن يحتاجه',
                 'description' => 'نبضة خير هي منصة شاملة تجمع بين المتبرعين، المؤسسات، والمتطوعين في مكان واحد لدعم الحالات الإنسانية وتغيير حياة آلاف الأسر بلمسة خير.',
-                'video' => 'hero/hero.webp',
+                'video' => 'hero/videos/hero.webp',
             ]
         );
     }
