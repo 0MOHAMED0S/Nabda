@@ -30,10 +30,8 @@ Route::get('/user', function (Request $request) {
 //reviews
 Route::get('/reviews', [ReviewController::class, 'index']);
 Route::post('/reviews', [ReviewController::class, 'store']);
-
 //hero section
 Route::get('/hero', [HeroController::class, 'index']);
-
 //tricker
 Route::get('/tickers', [TickerController::class, 'index']);
 
@@ -67,10 +65,16 @@ Route::get('foundation/', [FoundationController::class, 'index']);
 Route::get('foundation/{id}/show', [FoundationController::class, 'show']);
 Route::get('/foundation/{id}/cases', [FoundationController::class, 'getFoundationCases']);
 Route::get('/cases/{caseId}', [FoundationController::class, 'getCaseDetails']);
+
 Route::prefix('foundation')->group(function () {
     Route::post('/register', [FoundationAuthController::class, 'register']);
     Route::post('/login', [FoundationAuthController::class, 'login']);
-    Route::post('/donate', [DonationController::class, 'store']);
+    
+    // مسار الدفع (يمكن أن يكون داخل auth:sanctum أو خارجه، لأن دالة store تعالج الحالتين)
+Route::post('/donate', [DonationController::class, 'store']);
+// مسار استقبال الرد من Paymob (يجب أن يكون خااارج الـ auth:sanctum ومفتوح للجميع)
+Route::post('/paymob/callback', [DonationController::class, 'paymobCallback']);
+
     Route::middleware(['auth:sanctum', 'foundation'])->group(function () {
         Route::post('/logout', [FoundationAuthController::class, 'logout']);
         Route::apiResource('faqs', FoundationFaqController::class);
@@ -93,7 +97,7 @@ use App\Http\Controllers\Api\User\UserAuthController;
 Route::prefix('user')->group(function () {
     Route::post('/register', [UserAuthController::class, 'register']);
     Route::post('/login', [UserAuthController::class, 'login']);
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'is_user'])->group(function () {
         Route::post('/profile/update', [UserAuthController::class, 'updateProfile']);
         Route::post('/change-password', [UserAuthController::class, 'updatePassword']);
         Route::get('/profile', [UserAuthController::class, 'profile']);
@@ -103,13 +107,10 @@ Route::prefix('user')->group(function () {
 
 
 use App\Http\Controllers\Api\Volunteer\VolunteerAuthController;
-
-// 🟢 مجموعة مسارات المتطوعين
 Route::prefix('volunteer')->group(function () {
-
     Route::post('/register', [VolunteerAuthController::class, 'register']);
     Route::post('/login', [VolunteerAuthController::class, 'login']);
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'volunteer'])->group(function () {
         Route::post('/logout', [VolunteerAuthController::class, 'logout']);
     });
 });

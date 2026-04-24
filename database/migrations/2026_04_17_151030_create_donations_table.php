@@ -11,35 +11,38 @@ return new class extends Migration
         Schema::create('donations', function (Blueprint $table) {
             $table->id();
 
-            // 1. وجهة التبرع (Relations)
+            // 1. وجهة التبرع
             $table->foreignId('foundation_id')->constrained('foundations')->cascadeOnDelete();
-            // حالة التبرع (إذا كان null فهذا يعني التبرع للمؤسسة بشكل عام)
             $table->foreignId('case_id')->nullable()->constrained('foundation_cases')->nullOnDelete();
-            // المستخدم المتبرع (إذا كان null فهذا يعني أنه زائر / فاعل خير)
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
 
             // 2. نوع التبرع
             $table->enum('donation_type', ['financial', 'in-kind']);
 
-            // 3. بيانات المتبرع (للزوار أو للتوصيل)
+            // 3. بيانات المتبرع
             $table->string('donor_name')->default('فاعل خير');
+            $table->string('donor_email')->nullable(); // 🎯 مهم جداً لـ Paymob
             $table->string('donor_phone')->nullable();
-            $table->text('donor_address')->nullable(); // مطلوب في حالة الاستلام من المنزل
+            $table->text('donor_address')->nullable();
 
-            // 4. التفاصيل المالية (للتبرع المالي)
+            // 4. التفاصيل المالية
             $table->decimal('amount', 15, 2)->nullable();
-            $table->string('payment_method')->nullable(); // طريقة الدفع (مثال: fake, visa, fawry)
+            $table->string('payment_method')->nullable();
             $table->enum('payment_status', ['pending', 'paid', 'failed'])->default('pending');
 
-            // 5. التفاصيل العينية (للتبرع العيني)
-            $table->string('item_category')->nullable(); // نوع الصنف (ملابس، أدوية، الخ)
-            $table->text('item_description')->nullable(); // وصف تفصيلي
-            $table->string('item_condition')->nullable(); // حالة التبرع (جديد، مستعمل)
-            $table->enum('delivery_method', ['home_pickup', 'branch_dropoff', 'collection_point'])->nullable(); // طريقة التسليم
-            $table->dateTime('pickup_time')->nullable(); // الوقت المناسب للاستلام
-            $table->string('donation_image')->nullable(); // صورة التبرع العيني (اختياري)
+            // 🎯 5. إضافات بوابات الدفع (Paymob)
+            $table->string('paymob_order_id')->nullable();       // رقم الطلب في بيموب
+            $table->string('paymob_transaction_id')->nullable(); // رقم العملية الناجحة
 
-            // 6. حالة الطلب بشكل عام
+            // 6. التفاصيل العينية
+            $table->string('item_category')->nullable();
+            $table->text('item_description')->nullable();
+            $table->string('item_condition')->nullable();
+            $table->enum('delivery_method', ['home_pickup', 'branch_dropoff', 'collection_point'])->nullable();
+            $table->dateTime('pickup_time')->nullable();
+            $table->string('donation_image')->nullable();
+
+            // 7. حالة الطلب بشكل عام
             $table->enum('status', ['pending', 'in_progress', 'completed', 'cancelled'])->default('pending');
 
             $table->timestamps();

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Volunteer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Volunteer;
-use App\Models\Foundation; // 🎯 Required for foundation validation
+use App\Models\Foundation;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -16,45 +16,46 @@ use Exception;
 
 class VolunteerAuthController extends Controller
 {
-/**
+    /**
      * API: تسجيل حساب متطوع جديد (يذهب لقائمة الانتظار Pending)
      */
     public function register(Request $request): JsonResponse
     {
-        // 1. Initial Strict Validation
+        // 1. Initial Strict Validation (يطابق تصميم الشاشات بالضبط)
         $validator = Validator::make($request->all(), [
-            // Step 1: Basic Info
+            // الخطوة 1: البيانات الشخصية
             'name'              => 'required|string|min:2|max:255',
             'email'             => 'required|string|email|max:255|unique:volunteers,email',
             'phone'             => 'required|string|max:20|unique:volunteers,phone',
             'address'           => 'required|string|max:500',
 
-            // Step 2: Volunteer Details
+            // الخطوة 2: بيانات التطوع
             'volunteer_type'    => 'required|in:general,affiliated',
 
-            // 🎯 الاحترافية هنا:
-            // 1. exclude_if: إذا كان التطوع (general)، استبعد هذا الحقل تماماً من الفحص.
-            // 2. required_if: إذا كان التطوع (affiliated)، اجعله إجبارياً وتأكد من وجوده في جدول المؤسسات.
-            'foundation_id'     => 'exclude_if:volunteer_type,general|required_if:volunteer_type,affiliated|exists:foundations,id',
+            // 🎯 السحر هنا: ممنوع إرسال مؤسسة إذا كان التطوع عام، ومطلوب إذا كان تابع لمؤسسة
+            'foundation_id'     => 'prohibited_if:volunteer_type,general|required_if:volunteer_type,affiliated|nullable|integer',
 
             'volunteer_fields'  => 'nullable|array',
-            'volunteer_fields.*'=> 'string|max:100', // Validate array items
+            'volunteer_fields.*' => 'string|max:100', // التحقق من محتوى المصفوفة
             'governorates'      => 'nullable|array',
-            'governorates.*'    => 'string|max:100', // Validate array items
+            'governorates.*'    => 'string|max:100', // التحقق من محتوى المصفوفة
             'avatar'            => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
 
-            // Step 3: Sensitive Info
+            // الخطوة 3: البيانات الحساسة والمرفقات
             'national_id'       => 'required|string|size:14|unique:volunteers,national_id',
             'national_id_front' => 'required|image|mimes:jpeg,png,jpg|max:5120',
             'national_id_back'  => 'required|image|mimes:jpeg,png,jpg|max:5120',
             'password'          => 'required|string|min:8|confirmed',
         ], [
-            'foundation_id.required_if' => 'يرجى اختيار المؤسسة بما أنك اخترت التطوع الدائم مع مؤسسة محددة.',
-            'foundation_id.exists'      => 'المؤسسة التي قمت باختيارها غير صالحة.',
-            'national_id.size'          => 'الرقم القومي يجب أن يتكون من 14 رقماً.',
-            'national_id.unique'        => 'هذا الرقم القومي مسجل لدينا مسبقاً.',
-            'national_id_front.required'=> 'صورة الوجه الأمامي للبطاقة مطلوبة.',
-            'national_id_back.required' => 'صورة الوجه الخلفي للبطاقة مطلوبة.',
+            // الرسائل المخصصة (Custom Messages)
+            'foundation_id.prohibited_if' => 'لا يمكنك اختيار مؤسسة محددة عندما يكون نوع التطوع "عام".',
+            'foundation_id.required_if'   => 'يرجى اختيار المؤسسة بما أنك اخترت التطوع الدائم.',
+            'national_id.size'            => 'الرقم القومي يجب أن يتكون من 14 رقماً.',
+            'national_id.unique'          => 'هذا الرقم القومي مسجل لدينا مسبقاً.',
+            'national_id_front.required'  => 'صورة الوجه الأمامي للبطاقة مطلوبة.',
+            'national_id_back.required'   => 'صورة الوجه الخلفي للبطاقة مطلوبة.',
+            'volunteer_fields.array'      => 'صيغة مجالات التطوع غير صحيحة.',
+            'governorates.array'          => 'صيغة المحافظات غير صحيحة.',
         ]);
 
         if ($validator->fails()) {
@@ -65,8 +66,9 @@ class VolunteerAuthController extends Controller
             ], 422);
         }
 
-        // 🎯 2. Deep Validation: Check if the foundation is active and approved (فقط للمنضمين لمؤسسة)
+        // 🎯 2. Deep Validation: التحقق من المؤسسة (إذا اختار التطوع مع مؤسسة محددة)
         if ($request->volunteer_type === 'affiliated') {
+            // نتأكد أن المؤسسة موجودة، وحسابها نشط، ومعتمدة من الإدارة
             $foundation = Foundation::where('id', $request->foundation_id)
                 ->where('status', 'active')
                 ->where('approval_status', 'approved')
@@ -76,12 +78,12 @@ class VolunteerAuthController extends Controller
                 return response()->json([
                     'status'  => false,
                     'message' => 'المؤسسة المختارة غير موجودة، أو غير معتمدة حالياً لاستقبال متطوعين.',
-                    'errors'  => ['foundation_id' => ['المؤسسة غير متاحة.']]
+                    'errors'  => ['foundation_id' => ['المؤسسة غير متاحة للتطوع حالياً.']]
                 ], 422);
             }
         }
 
-        // File path trackers for cleanup on failure
+        // متغيرات لتتبع مسارات الملفات المرفوعة (من أجل حذفها لو فشلت قاعدة البيانات)
         $avatarPath = null;
         $idFrontPath = null;
         $idBackPath = null;
@@ -89,14 +91,14 @@ class VolunteerAuthController extends Controller
         try {
             DB::beginTransaction();
 
-            // 3. Secure File Uploads
+            // 3. رفع الملفات بشكل آمن (Secure File Uploads)
             if ($request->hasFile('avatar')) {
                 $avatarPath = $request->file('avatar')->store('volunteers/avatars', 'public');
             }
             $idFrontPath = $request->file('national_id_front')->store('volunteers/national_ids', 'public');
             $idBackPath  = $request->file('national_id_back')->store('volunteers/national_ids', 'public');
 
-            // 4. Create Volunteer Record
+            // 4. إنشاء سجل المتطوع
             $volunteer = Volunteer::create([
                 'name'              => trim($request->name),
                 'email'             => strtolower(trim($request->email)),
@@ -104,7 +106,7 @@ class VolunteerAuthController extends Controller
                 'address'           => trim($request->address),
 
                 'volunteer_type'    => $request->volunteer_type,
-                // حماية إضافية: نضع null إجبارياً إذا كان التطوع عام، حتى لو تسرب الـ ID من الفرونت إند
+                // نأخذ الـ foundation_id فقط إذا كان النوع affiliated، غير ذلك نضع null
                 'foundation_id'     => $request->volunteer_type === 'affiliated' ? $request->foundation_id : null,
 
                 'volunteer_fields'  => $request->volunteer_fields,
@@ -115,7 +117,8 @@ class VolunteerAuthController extends Controller
                 'national_id_front' => $idFrontPath,
                 'national_id_back'  => $idBackPath,
                 'password'          => Hash::make($request->password),
-                'status'            => 'pending', // Requires admin approval
+
+                'status'            => 'pending', // 🎯 إجباري: يحتاج لموافقة الإدارة
             ]);
 
             DB::commit();
@@ -128,11 +131,10 @@ class VolunteerAuthController extends Controller
                     'name'  => $volunteer->name,
                 ]
             ], 201);
-
         } catch (Exception $e) {
             DB::rollBack();
 
-            // 🛡️ Orphan File Cleanup: Delete files if DB insert fails
+            // 🛡️ التنظيف الذكي (Orphan File Cleanup): حذف الصور إذا فشل الحفظ في الداتابيز
             foreach ([$avatarPath, $idFrontPath, $idBackPath] as $path) {
                 if ($path && Storage::disk('public')->exists($path)) {
                     Storage::disk('public')->delete($path);
@@ -206,7 +208,7 @@ class VolunteerAuthController extends Controller
             if ($volunteer->volunteer_type === 'affiliated' && $volunteer->foundation_id) {
                 $foundation = Foundation::find($volunteer->foundation_id);
                 if (!$foundation || $foundation->status !== 'active' || $foundation->approval_status !== 'approved') {
-                     return response()->json([
+                    return response()->json([
                         'status'  => false,
                         'message' => 'تم إيقاف حساب المؤسسة التي تتطوع معها مؤقتاً. يرجى مراجعة الإدارة.'
                     ], 403);
@@ -228,7 +230,6 @@ class VolunteerAuthController extends Controller
                     'token'     => $token
                 ]
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API Volunteer Login Error: ' . $e->getMessage());
             return response()->json([
@@ -261,7 +262,6 @@ class VolunteerAuthController extends Controller
                 'status'  => false,
                 'message' => 'عملية غير مصرح بها. نوع الحساب غير مطابق.'
             ], 403);
-
         } catch (Exception $e) {
             Log::error('API Volunteer Logout Error: ' . $e->getMessage());
             return response()->json([

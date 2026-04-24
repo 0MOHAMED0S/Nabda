@@ -86,7 +86,6 @@ class UserAuthController extends Controller
                     'token' => $token
                 ]
             ], 201);
-
         } catch (Exception $e) {
             // 🛡️ التراجع عن قاعدة البيانات في حال حدوث أي خطأ برمجي أو انقطاع
             DB::rollBack();
@@ -158,7 +157,6 @@ class UserAuthController extends Controller
                     'token' => $token
                 ]
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API User Login Error: ' . $e->getMessage());
             return response()->json([
@@ -168,7 +166,7 @@ class UserAuthController extends Controller
         }
     }
 
-/**
+    /**
      * API: جلب الملف الشخصي للمستخدم الحالي (مع كافة البيانات)
      */
     public function profile(Request $request): JsonResponse
@@ -209,7 +207,6 @@ class UserAuthController extends Controller
                 'message' => 'تم جلب الملف الشخصي بكافة البيانات بنجاح.',
                 'data'    => $data
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API User Profile Error: ' . $e->getMessage());
             return response()->json([
@@ -239,7 +236,7 @@ class UserAuthController extends Controller
                 'phone'             => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)],
                 'city'              => 'nullable|string|max:255',
                 'charity_interests' => 'nullable|array', // يجب أن ترسل كمصفوفة من الواجهة
-                'charity_interests.*'=> 'string|max:100', // كل عنصر داخل المصفوفة يجب أن يكون نص
+                'charity_interests.*' => 'string|max:100', // كل عنصر داخل المصفوفة يجب أن يكون نص
                 'avatar'            => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             ], [
                 'email.unique'             => 'هذا البريد الإلكتروني مستخدم لحساب آخر.',
@@ -288,7 +285,6 @@ class UserAuthController extends Controller
                 'message' => 'تم حفظ التغييرات بنجاح.',
                 'data'    => $user
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API User Update Profile Error: ' . $e->getMessage());
             return response()->json([
@@ -321,7 +317,6 @@ class UserAuthController extends Controller
                 'status'  => false,
                 'message' => 'عملية غير مصرح بها.'
             ], 403);
-
         } catch (Exception $e) {
             Log::error('API User Logout Error: ' . $e->getMessage());
             return response()->json([
@@ -391,7 +386,6 @@ class UserAuthController extends Controller
                 'status'  => true,
                 'message' => 'تم تحديث كلمة المرور بنجاح.',
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API User Update Password Error: ' . $e->getMessage());
             return response()->json([
