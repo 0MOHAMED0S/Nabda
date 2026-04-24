@@ -57,8 +57,7 @@
                             </div>
                         </div>
 
-                        <input type="file" name="video" class="hidden" accept="video/mp4, video/quicktime, video/ogg" @change="fileChosen">
-                    </label>
+<input type="file" name="video" class="hidden" accept="video/mp4, video/quicktime, video/ogg, video/webm" @change="fileChosen">                    </label>
 
                     @error('video') <span class="text-[11px] text-rose-500 font-bold mt-2 text-center block">{{ $message }}</span> @enderror
                     <p class="text-[11px] text-slate-400 mt-3 font-medium text-center"><i class="fa-solid fa-circle-info ml-1"></i> الحجم الأقصى: 20 ميجابايت.</p>
