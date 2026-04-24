@@ -35,11 +35,11 @@ class HeroController extends Controller
         $request->validate([
             'title'       => 'required|string|max:255',
             'description' => 'required|string',
-            'video'       => 'nullable|mimes:mp4,mov,ogg,qt|max:20480', // حد أقصى 20 ميجابايت
+            'video'       => 'nullable|mimes:mp4,mov,ogg,qt,webm|max:20480', // حد أقصى 20 ميجابايت
         ], [
             'title.required'       => 'يرجى إدخال العنوان الرئيسي.',
             'description.required' => 'يرجى إدخال الوصف.',
-            'video.mimes'          => 'صيغة الفيديو غير مدعومة. الصيغ المقبولة: mp4, mov, ogg, qt.',
+            'video.mimes'          => 'صيغة الفيديو غير مدعومة. الصيغ المقبولة: mp4, mov, ogg, qt, webm.',
             'video.max'            => 'حجم الفيديو كبير جداً. الحد الأقصى هو 20 ميجابايت.',
         ]);
 
