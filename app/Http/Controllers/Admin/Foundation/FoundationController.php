@@ -136,8 +136,8 @@ class FoundationController extends Controller
         try {
             // جلب المؤسسات المعتمدة فقط
             $foundations = Foundation::where('approval_status', 'approved')
-                                     ->orderBy('updated_at', 'desc')
-                                     ->paginate(15);
+                ->orderBy('updated_at', 'desc')
+                ->paginate(15);
 
             $stats = [
                 'total_approved' => Foundation::where('approval_status', 'approved')->count(),

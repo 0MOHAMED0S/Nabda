@@ -50,21 +50,28 @@ class FoundationTeamController extends Controller
                     'status'  => true,
                     'message' => 'لا يوجد أعضاء في فريق العمل حالياً. يمكنك إضافة أعضاء جدد.',
                     'data'    => []
-                ], 200);
+                ], 200, [], JSON_UNESCAPED_UNICODE);
             }
+
+            // 🎯 تحويل مسار الصورة إلى رابط كامل (Full URL)
+            $team->transform(function ($member) {
+                if (!empty($member->image) && !str_starts_with($member->image, 'http')) {
+                    $member->image = asset('storage/' . $member->image);
+                }
+                return $member;
+            });
 
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب أعضاء فريق العمل بنجاح.',
                 'data'    => $team
-            ], 200);
-
+            ], 200, [], JSON_UNESCAPED_UNICODE);
         } catch (Exception $e) {
             Log::error("API Foundation Team Index Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني في الخادم أثناء جلب البيانات.'
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -103,7 +110,6 @@ class FoundationTeamController extends Controller
                 'message' => 'تمت إضافة العضو إلى فريق العمل بنجاح.',
                 'data'    => $member
             ], 201);
-
         } catch (Exception $e) {
             Log::error("API Foundation Team Store Error: " . $e->getMessage());
             return response()->json([
@@ -133,7 +139,6 @@ class FoundationTeamController extends Controller
                 'message' => 'تم جلب تفاصيل العضو بنجاح.',
                 'data'    => $member
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Team Show Error: " . $e->getMessage());
             return response()->json([
@@ -203,7 +208,6 @@ class FoundationTeamController extends Controller
                 'message' => 'تم تحديث بيانات العضو بنجاح.',
                 'data'    => $member
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Team Update Error: " . $e->getMessage());
             return response()->json([
@@ -239,7 +243,6 @@ class FoundationTeamController extends Controller
                 'status'  => true,
                 'message' => 'تم حذف العضو من فريق العمل بنجاح.'
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Team Delete Error: " . $e->getMessage());
             return response()->json([

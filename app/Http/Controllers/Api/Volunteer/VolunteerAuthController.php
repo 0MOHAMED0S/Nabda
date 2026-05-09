@@ -63,7 +63,7 @@ class VolunteerAuthController extends Controller
                 'status'  => false,
                 'message' => 'يرجى مراجعة البيانات المدخلة وإصلاح الأخطاء.',
                 'errors'  => $validator->errors()
-            ], 422);
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         // 🎯 2. Deep Validation: التحقق من المؤسسة (إذا اختار التطوع مع مؤسسة محددة)
@@ -79,7 +79,7 @@ class VolunteerAuthController extends Controller
                     'status'  => false,
                     'message' => 'المؤسسة المختارة غير موجودة، أو غير معتمدة حالياً لاستقبال متطوعين.',
                     'errors'  => ['foundation_id' => ['المؤسسة غير متاحة للتطوع حالياً.']]
-                ], 422);
+                ], 422, [], JSON_UNESCAPED_UNICODE);
             }
         }
 
@@ -130,7 +130,7 @@ class VolunteerAuthController extends Controller
                     'id'    => $volunteer->id,
                     'name'  => $volunteer->name,
                 ]
-            ], 201);
+            ], 201, [], JSON_UNESCAPED_UNICODE);
         } catch (Exception $e) {
             DB::rollBack();
 
@@ -146,7 +146,7 @@ class VolunteerAuthController extends Controller
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني غير متوقع أثناء تسجيل الحساب. يرجى المحاولة لاحقاً.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -155,7 +155,7 @@ class VolunteerAuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
-        // 1. Strict Input Validation
+        // 1. Strict Input Validation (فحص المدخلات بصرامة)
         $validator = Validator::make($request->all(), [
             'email'    => 'required|string|email|max:255',
             'password' => 'required|string',
@@ -170,55 +170,58 @@ class VolunteerAuthController extends Controller
                 'status'  => false,
                 'message' => 'بيانات مفقودة أو غير صالحة.',
                 'errors'  => $validator->errors()
-            ], 422);
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         try {
-            // 2. Sanitization
+            // 2. Sanitization (تنظيف الإيميل)
             $email = strtolower(trim($request->email));
 
-            // 3. Retrieve Volunteer
+            // 3. Retrieve Volunteer (البحث عن المتطوع)
             $volunteer = Volunteer::where('email', $email)->first();
 
             // 4. Security Check: Unified Error for Enumeration Prevention
+            // فحص أمني: رسالة موحدة لمنع هجمات التخمين
             if (!$volunteer || !Hash::check($request->password, $volunteer->password)) {
                 return response()->json([
                     'status'  => false,
                     'message' => 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
-                ], 401);
+                ], 401, [], JSON_UNESCAPED_UNICODE);
             }
 
             // 🎯 5. Strict Business Logic Check: Is the account approved?
+            // الفحص المنطقي الصارم: هل حساب المتطوع معتمد؟
             if ($volunteer->status === 'pending') {
                 return response()->json([
                     'status'  => false,
                     'message' => 'حسابك لا يزال قيد المراجعة من قبل الإدارة. يرجى الانتظار حتى يتم التحقق من بياناتك وبطاقتك الشخصية.'
-                ], 403);
+                ], 403, [], JSON_UNESCAPED_UNICODE); // 403 Forbidden
             }
 
             if ($volunteer->status === 'rejected') {
                 return response()->json([
                     'status'  => false,
                     'message' => 'نعتذر، لقد تم رفض طلب التطوع الخاص بك من قبل الإدارة.'
-                ], 403);
+                ], 403, [], JSON_UNESCAPED_UNICODE);
             }
 
             // 🎯 6. Associated Foundation Check (If Affiliated)
-            // If the volunteer is tied to a specific foundation, ensure that foundation hasn't been banned/suspended.
+            // التحقق من المؤسسة (إذا كان التطوع تابعاً لمؤسسة محددة)
             if ($volunteer->volunteer_type === 'affiliated' && $volunteer->foundation_id) {
                 $foundation = Foundation::find($volunteer->foundation_id);
                 if (!$foundation || $foundation->status !== 'active' || $foundation->approval_status !== 'approved') {
                     return response()->json([
                         'status'  => false,
                         'message' => 'تم إيقاف حساب المؤسسة التي تتطوع معها مؤقتاً. يرجى مراجعة الإدارة.'
-                    ], 403);
+                    ], 403, [], JSON_UNESCAPED_UNICODE);
                 }
             }
 
-            // 7. Issue Token
+            // 7. Issue Token (إصدار التوكن)
             $token = $volunteer->createToken('VolunteerAccess')->plainTextToken;
 
             // 8. Prepare Output Data (Hide highly sensitive fields)
+            // تهيئة البيانات للعرض (إخفاء البيانات فائقة الحساسية)
             $volunteer->avatar_url = $volunteer->avatar ? asset('storage/' . $volunteer->avatar) : null;
             $volunteer->makeHidden(['national_id_front', 'national_id_back', 'avatar']);
 
@@ -229,13 +232,14 @@ class VolunteerAuthController extends Controller
                     'volunteer' => $volunteer,
                     'token'     => $token
                 ]
-            ], 200);
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
         } catch (Exception $e) {
             Log::error('API Volunteer Login Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء تسجيل الدخول.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -248,6 +252,7 @@ class VolunteerAuthController extends Controller
             $user = $request->user();
 
             // 🛡️ Privilege Escalation Prevention: Ensure token belongs to a Volunteer
+            // We assume you have the IsVolunteer middleware in place, but this is an extra safety net.
             if ($user instanceof Volunteer) {
                 // Destroy the current token
                 $user->currentAccessToken()->delete();
@@ -255,19 +260,19 @@ class VolunteerAuthController extends Controller
                 return response()->json([
                     'status'  => true,
                     'message' => 'تم تسجيل الخروج بنجاح.'
-                ], 200);
+                ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
             return response()->json([
                 'status'  => false,
                 'message' => 'عملية غير مصرح بها. نوع الحساب غير مطابق.'
-            ], 403);
+            ], 403, [], JSON_UNESCAPED_UNICODE);
         } catch (Exception $e) {
             Log::error('API Volunteer Logout Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء تسجيل الخروج.'
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 }

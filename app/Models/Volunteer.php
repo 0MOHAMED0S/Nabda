@@ -38,4 +38,17 @@ class Volunteer extends Authenticatable
     {
         return $this->belongsTo(Foundation::class);
     }
+    public function opportunities()
+    {
+        return $this->belongsToMany(VolunteerOpportunity::class, 'opportunity_volunteer')
+                    ->withPivot('status')
+                    ->withTimestamps();
+    }
+    /**
+     * تقارير الساعات التي رفعها المتطوع
+     */
+    public function reports()
+    {
+        return $this->hasMany(VolunteerReport::class, 'volunteer_id');
+    }
 }

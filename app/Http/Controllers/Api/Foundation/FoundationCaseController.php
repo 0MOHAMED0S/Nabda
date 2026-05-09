@@ -51,7 +51,8 @@ class FoundationCaseController extends Controller
 
     /** 1. جلب كل الحالات */
 /** 1. جلب كل الحالات (مع الإحصائيات وكل تفاصيل الحالة) */
-    public function index(Request $request)
+
+public function index(Request $request)
     {
         try {
             $cases = $request->user()->cases()
@@ -85,14 +86,29 @@ class FoundationCaseController extends Controller
                 // تحويل جميع بيانات الحالة الأصلية إلى مصفوفة
                 $caseData = $case->toArray();
 
+                // 🎯 تحويل مسارات الملفات إلى روابط كاملة (Full URLs)
+                if (is_array($caseData['images'])) {
+                    $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+                }
+
+                if (is_array($caseData['documents'])) {
+                    $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+                }
+
+                if (!empty($caseData['video'])) {
+                    $caseData['video'] = asset('storage/' . $caseData['video']);
+                }
+
                 // إضافة الحسابات الإضافية للواجهة
                 $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
                 $caseData['collected_amount']      = $collected;
                 $caseData['completion_percentage'] = $percentage;
                 $caseData['donors_count']          = $case->donors_count ?? 0;
 
-                // إضافة صورة مصغرة للجدول (اختياري للفرونت إند)
-                $caseData['thumbnail'] = (is_array($case->images) && count($case->images) > 0) ? $case->images[0] : null;
+                // إضافة صورة مصغرة للجدول برابط كامل
+                $caseData['thumbnail'] = (is_array($case->images) && count($case->images) > 0)
+                    ? asset('storage/' . $case->images[0])
+                    : null;
 
                 return $caseData;
             });
@@ -102,16 +118,16 @@ class FoundationCaseController extends Controller
                 'message'    => $cases->isEmpty() ? 'لا توجد حالات مضافة حالياً.' : 'تم جلب بيانات الحالات بنجاح.',
                 'statistics' => $statistics,
                 'data'       => $formattedCases
-            ], 200);
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             Log::error("API Foundation Cases Index Error: " . $e->getMessage());
-            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب البيانات.'], 500);
+            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب البيانات.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /** 2. إضافة حالة جديدة */
-    public function store(Request $request)
+public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'title'                  => 'required|string|max:255',
@@ -133,7 +149,7 @@ class FoundationCaseController extends Controller
         ], $this->validationMessages());
 
         if ($validator->fails()) {
-            return response()->json(['status' => false, 'message' => 'تعذر الحفظ لوجود أخطاء في البيانات.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => false, 'message' => 'تعذر الحفظ لوجود أخطاء في البيانات.', 'errors' => $validator->errors()], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         try {
@@ -154,16 +170,32 @@ class FoundationCaseController extends Controller
             }
 
             $case = $request->user()->cases()->create($data);
-            return response()->json(['status' => true, 'message' => 'تم إضافة الحالة بنجاح.', 'data' => $case], 201);
+
+            // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
+            $caseData = $case->toArray();
+
+            if (isset($caseData['images']) && is_array($caseData['images'])) {
+                $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+            }
+
+            if (isset($caseData['documents']) && is_array($caseData['documents'])) {
+                $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+            }
+
+            if (!empty($caseData['video'])) {
+                $caseData['video'] = asset('storage/' . $caseData['video']);
+            }
+
+            return response()->json(['status' => true, 'message' => 'تم إضافة الحالة بنجاح.', 'data' => $caseData], 201, [], JSON_UNESCAPED_UNICODE);
         } catch (Exception $e) {
             Log::error("API Foundation Case Store Error: " . $e->getMessage());
-            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء حفظ الحالة.'], 500);
+            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء حفظ الحالة.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /** 3. عرض حالة واحدة */
 /** 3. عرض حالة واحدة مع حساباتها */
-    public function show(Request $request, $id)
+public function show(Request $request, $id)
     {
         try {
             // جلب الحالة مع حساب التبرعات الخاصة بها
@@ -177,7 +209,7 @@ class FoundationCaseController extends Controller
                 ->find($id);
 
             if (!$case) {
-                return response()->json(['status' => false, 'message' => 'الحالة غير موجودة.'], 404);
+                return response()->json(['status' => false, 'message' => 'الحالة غير موجودة.'], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
             $isFinancial = $case->goal_type === 'financial';
@@ -192,6 +224,20 @@ class FoundationCaseController extends Controller
 
             // تجهيز البيانات النهائية
             $caseData = $case->toArray();
+
+            // 🎯 تحويل مسارات الملفات إلى روابط كاملة (Full URLs)
+            if (isset($caseData['images']) && is_array($caseData['images'])) {
+                $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+            }
+
+            if (isset($caseData['documents']) && is_array($caseData['documents'])) {
+                $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+            }
+
+            if (!empty($caseData['video'])) {
+                $caseData['video'] = asset('storage/' . $caseData['video']);
+            }
+
             $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
             $caseData['collected_amount']      = $collected;
             $caseData['completion_percentage'] = $percentage;
@@ -201,19 +247,19 @@ class FoundationCaseController extends Controller
                 'status'  => true,
                 'message' => 'تم جلب تفاصيل الحالة بنجاح.',
                 'data'    => $caseData
-            ], 200);
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             Log::error("API Foundation Case Show Error: " . $e->getMessage());
-            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب بيانات الحالة.'], 500);
+            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب بيانات الحالة.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /** 4. تحديث حالة (المُحسّنة والمحمية) */
-    public function update(Request $request, $id)
+public function update(Request $request, $id)
     {
         $case = $request->user()->cases()->find($id);
-        if (!$case) return response()->json(['status' => false, 'message' => 'الحالة غير موجودة أو تم حذفها.'], 404);
+        if (!$case) return response()->json(['status' => false, 'message' => 'الحالة غير موجودة أو تم حذفها.'], 404, [], JSON_UNESCAPED_UNICODE);
 
         // معرفة نوع الهدف النهائي (سواء أرسله الآن في الطلب أو الموجود مسبقاً في الداتابيز)
         $currentGoalType = $request->input('goal_type', $case->goal_type);
@@ -256,7 +302,7 @@ class FoundationCaseController extends Controller
         $validator = Validator::make($request->all(), $rules, $this->validationMessages());
 
         if ($validator->fails()) {
-            return response()->json(['status' => false, 'message' => 'تعذر التحديث لوجود أخطاء في البيانات.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => false, 'message' => 'تعذر التحديث لوجود أخطاء في البيانات.', 'errors' => $validator->errors()], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         try {
@@ -288,11 +334,27 @@ class FoundationCaseController extends Controller
             }
 
             if (!empty($data)) $case->update($data);
-            return response()->json(['status' => true, 'message' => 'تم تحديث بيانات الحالة بنجاح.', 'data' => $case], 200);
+
+            // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
+            $caseData = $case->toArray();
+
+            if (isset($caseData['images']) && is_array($caseData['images'])) {
+                $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+            }
+
+            if (isset($caseData['documents']) && is_array($caseData['documents'])) {
+                $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+            }
+
+            if (!empty($caseData['video'])) {
+                $caseData['video'] = asset('storage/' . $caseData['video']);
+            }
+
+            return response()->json(['status' => true, 'message' => 'تم تحديث بيانات الحالة بنجاح.', 'data' => $caseData], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             Log::error("API Foundation Case Update Error: " . $e->getMessage());
-            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء التحديث.'], 500);
+            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء التحديث.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 

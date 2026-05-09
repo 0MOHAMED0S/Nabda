@@ -31,4 +31,10 @@ class FoundationCase extends Model
     {
         return $this->hasMany(Donation::class, 'case_id');
     }
+
+    // علاقة الحالة بتحديثاتها
+    public function updates()
+    {
+        return $this->hasMany(CaseUpdate::class, 'foundation_case_id')->orderBy('update_date', 'desc');
+    }
 }

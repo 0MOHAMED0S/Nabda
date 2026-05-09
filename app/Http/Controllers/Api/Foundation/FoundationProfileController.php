@@ -77,7 +77,7 @@ class FoundationProfileController extends Controller
     /**
      * API: عرض بيانات الملف الشخصي للمؤسسة الحالية
      */
-    public function show(Request $request)
+public function show(Request $request)
     {
         try {
             // جلب بيانات المؤسسة التي قامت بتسجيل الدخول حالياً
@@ -91,18 +91,48 @@ class FoundationProfileController extends Controller
                 'branches'     // الفروع
             ]);
 
+            // تحويل كائن المؤسسة إلى مصفوفة للتمكن من تعديل مسارات الملفات
+            $data = $foundation->toArray();
+
+            // 🎯 قائمة الحقول التي تحتوي على مسارات صور أو مستندات
+            $fileFields = [
+                'logo',
+                'license_image',
+                'commercial_register',
+                'tax_card',
+                'accreditation_letter',
+                'headquarters_image',
+                'cover_image'
+            ];
+
+            // تحويل المسارات إلى روابط كاملة (مع التأكد أنها ليست روابط كاملة بالفعل)
+            foreach ($fileFields as $field) {
+                if (!empty($data[$field]) && !str_starts_with($data[$field], 'http')) {
+                    $data[$field] = asset('storage/' . $data[$field]);
+                }
+            }
+
+            // تحويل صور أعضاء فريق العمل إلى روابط كاملة (إن وجدت)
+            if (isset($data['team_members']) && is_array($data['team_members'])) {
+                foreach ($data['team_members'] as &$member) {
+                    if (!empty($member['image']) && !str_starts_with($member['image'], 'http')) {
+                        $member['image'] = asset('storage/' . $member['image']);
+                    }
+                }
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب بيانات الملف الشخصي مع كافة التفاصيل بنجاح.',
-                'data'    => $foundation
-            ], 200);
+                'data'    => $data
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             Log::error("API Foundation Profile Show Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب بيانات الملف الشخصي.'
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 

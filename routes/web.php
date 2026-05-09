@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\Service\CategoryController;
 use App\Http\Controllers\Admin\Service\ServiceController;
 use App\Http\Controllers\Admin\ZakatConditionController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\Volunteer\VolunteerController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -82,11 +83,20 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             ->only(['index', 'store', 'update', 'destroy']);
 
         Route::prefix('foundations')->name('foundations.')->group(function () {
-        Route::get('/approved', [FoundationController::class, 'approvedIndex'])->name('approved');
-        Route::get('/', [FoundationController::class, 'index'])->name('index');
-        Route::put('/{foundation}', [FoundationController::class, 'update'])->name('update');
-        Route::put('/{foundation}/reject', [FoundationController::class, 'reject'])->name('reject'); // مسار الرفض
-        Route::delete('/{foundation}', [FoundationController::class, 'destroy'])->name('destroy');
-    });
+            Route::get('/approved', [FoundationController::class, 'approvedIndex'])->name('approved');
+            Route::get('/', [FoundationController::class, 'index'])->name('index');
+            Route::put('/{foundation}', [FoundationController::class, 'update'])->name('update');
+            Route::put('/{foundation}/reject', [FoundationController::class, 'reject'])->name('reject'); // مسار الرفض
+            Route::delete('/{foundation}', [FoundationController::class, 'destroy'])->name('destroy');
+        });
+
+        // ضع هذه الأسطر داخل الـ Route::group الخاص بلوحة تحكم الإدارة (Admin)
+        Route::prefix('volunteers')->name('volunteers.')->group(function () {
+            Route::get('/', [VolunteerController::class, 'index'])->name('index');
+            Route::get('/approved', [VolunteerController::class, 'approvedIndex'])->name('approve'); // صفحة المعتمدين
+            Route::put('/{volunteer}', [VolunteerController::class, 'update'])->name('update');
+            Route::patch('/{volunteer}/reject', [VolunteerController::class, 'reject'])->name('reject');
+            Route::delete('/{volunteer}', [VolunteerController::class, 'destroy'])->name('destroy');
+        });
     });
 });

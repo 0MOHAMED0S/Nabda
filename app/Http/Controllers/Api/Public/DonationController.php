@@ -43,7 +43,8 @@ class DonationController extends Controller
         $validator = Validator::make($request->all(), [
             'foundation_id'    => 'required|integer|exists:foundations,id',
             'case_id'          => [
-                'nullable', 'integer',
+                'nullable',
+                'integer',
                 Rule::exists('foundation_cases', 'id')->where(function ($query) use ($request) {
                     $query->where('foundation_id', $request->foundation_id);
                 }),
@@ -146,10 +147,18 @@ class DonationController extends Controller
                     'expiration'     => 3600,
                     'order_id'       => $paymobOrderId,
                     'billing_data'   => [
-                        "apartment" => "NA", "email" => $donation->donor_email, "floor" => "NA",
-                        "first_name" => $donation->donor_name, "street" => "NA", "building" => "NA",
-                        "phone_number" => $donation->donor_phone ?? "01000000000", "shipping_method" => "NA",
-                        "postal_code" => "NA", "city" => "NA", "country" => "EG", "last_name" => "NA",
+                        "apartment" => "NA",
+                        "email" => $donation->donor_email,
+                        "floor" => "NA",
+                        "first_name" => $donation->donor_name,
+                        "street" => "NA",
+                        "building" => "NA",
+                        "phone_number" => $donation->donor_phone ?? "01000000000",
+                        "shipping_method" => "NA",
+                        "postal_code" => "NA",
+                        "city" => "NA",
+                        "country" => "EG",
+                        "last_name" => "NA",
                         "state" => "NA"
                     ],
                     'currency'       => 'EGP',
@@ -175,7 +184,6 @@ class DonationController extends Controller
                 'message' => 'تم تسجيل تبرعكم العيني بنجاح. سيتم التواصل معكم قريباً لترتيب الاستلام.',
                 'data'    => $donation
             ], 201);
-
         } catch (Exception $e) {
             Log::error("API Make Donation Error: " . $e->getMessage());
             return response()->json([
@@ -195,12 +203,12 @@ class DonationController extends Controller
 
         // 1. التحقق من الـ HMAC للأمان
         $hmacString = $data['amount_cents'] . $data['created_at'] . $data['currency'] .
-                      $data['error_occured'] . $data['has_parent_transaction'] . $data['id'] .
-                      $data['integration_id'] . $data['is_3d_secure'] . $data['is_auth'] .
-                      $data['is_capture'] . $data['is_refunded'] . $data['is_standalone_payment'] .
-                      $data['is_voided'] . $data['order']['id'] . $data['owner'] .
-                      $data['pending'] . $data['source_data']['pan'] . $data['source_data']['sub_type'] .
-                      $data['source_data']['type'] . $data['success'];
+            $data['error_occured'] . $data['has_parent_transaction'] . $data['id'] .
+            $data['integration_id'] . $data['is_3d_secure'] . $data['is_auth'] .
+            $data['is_capture'] . $data['is_refunded'] . $data['is_standalone_payment'] .
+            $data['is_voided'] . $data['order']['id'] . $data['owner'] .
+            $data['pending'] . $data['source_data']['pan'] . $data['source_data']['sub_type'] .
+            $data['source_data']['type'] . $data['success'];
 
         $calculatedHmac = hash_hmac('sha512', $hmacString, env('PAYMOB_HMAC'));
 
@@ -231,7 +239,6 @@ class DonationController extends Controller
                         }
                     }
                 }
-
             } else {
                 // فشل الدفع
                 $donation->update(['payment_status' => 'failed', 'status' => 'cancelled']);
