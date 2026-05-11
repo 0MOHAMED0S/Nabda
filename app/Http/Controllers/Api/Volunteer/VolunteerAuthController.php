@@ -43,8 +43,8 @@ class VolunteerAuthController extends Controller
 
             // الخطوة 3: البيانات الحساسة والمرفقات
             'national_id'       => 'required|string|size:14|unique:volunteers,national_id',
-            'national_id_front' => 'required|image|mimes:jpeg,png,jpg|max:5120',
-            'national_id_back'  => 'required|image|mimes:jpeg,png,jpg|max:5120',
+            'national_id_front' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'national_id_back'  => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
             'password'          => 'required|string|min:8|confirmed',
         ], [
             // الرسائل المخصصة (Custom Messages)

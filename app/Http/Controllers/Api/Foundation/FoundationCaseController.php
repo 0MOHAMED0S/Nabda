@@ -145,7 +145,7 @@ public function store(Request $request)
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'nullable|array',
             'documents.*'            => 'file|mimes:pdf,doc,docx,xls,xlsx|max:10240',
-            'video'                  => 'nullable|file|mimes:mp4,avi,mov|max:51200',
+            'video'                  => 'nullable|file|mimes:mp4,avi,mov,webm|max:51200',
         ], $this->validationMessages());
 
         if ($validator->fails()) {
@@ -282,7 +282,7 @@ public function update(Request $request, $id)
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'sometimes|nullable|array',
             'documents.*'            => 'file|mimes:pdf,doc,docx,xls,xlsx|max:10240',
-            'video'                  => 'sometimes|nullable|file|mimes:mp4,avi,mov|max:51200',
+            'video'                  => 'sometimes|nullable|file|mimes:mp4,avi,mov,webm|max:51200',
         ];
 
         // 🎯 🛡️ القواعد الديناميكية لـ target_amount (إصلاح الثغرة المنطقية)
