@@ -139,7 +139,7 @@ public function show(Request $request)
     /**
      * API: تحديث بيانات الملف الشخصي للمؤسسة بصرامة
      */
-    public function update(Request $request)
+public function update(Request $request)
     {
         $foundation = $request->user();
 
@@ -176,7 +176,7 @@ public function show(Request $request)
                 'status'  => false,
                 'message' => 'تعذر التحديث لوجود أخطاء في البيانات المدخلة. يرجى مراجعتها.',
                 'errors'  => $validator->errors()
-            ], 422);
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         // التأكد من أن المستخدم أرسل بيانات فعلية لمنع استهلاك الموارد بطلبات فارغة
@@ -184,7 +184,7 @@ public function show(Request $request)
             return response()->json([
                 'status'  => false,
                 'message' => 'لم يتم إرسال أي بيانات جديدة ليتم تحديثها.'
-            ], 400); // 400 Bad Request
+            ], 400, [], JSON_UNESCAPED_UNICODE); // 400 Bad Request
         }
 
         try {
@@ -217,18 +217,37 @@ public function show(Request $request)
                 $foundation->update($data);
             }
 
+            // 🎯 تهيئة البيانات المحدثة وتحويل مسارات الملفات إلى روابط كاملة
+            $updatedData = $foundation->fresh()->toArray();
+
+            $fileFields = [
+                'logo',
+                'cover_image',
+                'license_image',
+                'commercial_register',
+                'tax_card',
+                'accreditation_letter',
+                'headquarters_image'
+            ];
+
+            foreach ($fileFields as $field) {
+                if (!empty($updatedData[$field]) && !str_starts_with($updatedData[$field], 'http')) {
+                    $updatedData[$field] = asset('storage/' . $updatedData[$field]);
+                }
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم تحديث بيانات الملف الشخصي بنجاح.',
-                'data'    => $foundation->fresh() // إرجاع البيانات المحدثة لتنعكس فوراً في الواجهة
-            ], 200);
+                'data'    => $updatedData
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             Log::error("API Foundation Profile Update Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني غير متوقع أثناء حفظ البيانات. يرجى المحاولة لاحقاً.'
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 }

@@ -40,9 +40,7 @@ class VolunteerOpportunityController extends Controller
         ];
     }
 
-    /**
-     * API: جلب قائمة فرص التطوع الخاصة بالمؤسسة (مع عدد المسجلين)
-     */
+
 /**
      * API: جلب قائمة فرص التطوع الخاصة بالمؤسسة (مع الإحصائيات والتفاصيل الكاملة)
      */
@@ -65,7 +63,8 @@ class VolunteerOpportunityController extends Controller
             $opportunities = VolunteerOpportunity::where('foundation_id', $foundationId)
                 ->with([
                     'foundation:id,name,logo', // جلب بيانات المؤسسة
-                    'volunteers:id,name,email,phone,avatar' // جلب بيانات المتطوعين المسجلين في الفرصة
+                    // 🎯 تم إضافة 'governorates' هنا لجلب محافظات المتطوع
+                    'volunteers:id,name,email,phone,avatar,governorates'
                 ])
                 ->withCount(['volunteers as accepted_volunteers_count' => function ($query) {
                     // حساب عدد المقبولين فقط لعرضها في عمود (المطلوب / المسجل)
@@ -116,6 +115,93 @@ class VolunteerOpportunityController extends Controller
         }
     }
 
+    /**
+     * API: عرض تفاصيل فرصة تطوعية واحدة (مع كافة التفاصيل والروابط الكاملة)
+     */
+/**
+     * API: عرض تفاصيل فرصة تطوعية واحدة (مع كافة التفاصيل والروابط الكاملة لكل الملفات)
+     */
+    public function show(Request $request, $id): JsonResponse
+    {
+        try {
+            $foundationId = $request->user()->id;
+
+            // جلب الفرصة مع العلاقات بالكامل وحساب عدد المقبولين
+            $opportunity = VolunteerOpportunity::where('id', $id)
+                ->where('foundation_id', $foundationId)
+                ->with([
+                    'foundation', // 👈 جلب كل بيانات المؤسسة
+                    'volunteers'  // 👈 جلب كل بيانات المتطوعين مع الـ Pivot الخاص بهم
+                ])
+                ->withCount(['volunteers as accepted_volunteers_count' => function ($query) {
+                    // حساب المقبولين فقط
+                    $query->where('opportunity_volunteer.status', 'accepted');
+                }])
+                ->first();
+
+            // التحقق من وجود الفرصة
+            if (!$opportunity) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'الفرصة التطوعية غير موجودة أو لا تملك صلاحية عرضها.'
+                ], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // 🎯 تهيئة الروابط الكاملة للصور والملفات (Full URLs) وإخفاء المسارات المحلية
+
+            // 1. ملفات وصور المؤسسة بالكامل
+            if ($opportunity->foundation) {
+                $foundationFiles = [
+                    'logo', 'cover_image', 'license_image', 'commercial_register',
+                    'tax_card', 'accreditation_letter', 'headquarters_image'
+                ];
+
+                foreach ($foundationFiles as $field) {
+                    if (!empty($opportunity->foundation->$field)) {
+                        $urlField = $field . '_url'; // إنشاء اسم حقل جديد (مثال: logo_url)
+
+                        $opportunity->foundation->$urlField = str_starts_with($opportunity->foundation->$field, 'http')
+                            ? $opportunity->foundation->$field
+                            : asset('storage/' . $opportunity->foundation->$field);
+
+                        $opportunity->foundation->makeHidden([$field]); // إخفاء المسار المحلي القديم
+                    }
+                }
+            }
+
+            // 2. ملفات وصور المتطوعين بالكامل
+            if ($opportunity->volunteers) {
+                $opportunity->volunteers->each(function ($volunteer) {
+                    $volunteerFiles = ['avatar', 'national_id_front', 'national_id_back'];
+
+                    foreach ($volunteerFiles as $field) {
+                        if (!empty($volunteer->$field)) {
+                            $urlField = $field . '_url'; // إنشاء اسم حقل جديد (مثال: avatar_url)
+
+                            $volunteer->$urlField = str_starts_with($volunteer->$field, 'http')
+                                ? $volunteer->$field
+                                : asset('storage/' . $volunteer->$field);
+
+                            $volunteer->makeHidden([$field]); // إخفاء المسار المحلي القديم
+                        }
+                    }
+                });
+            }
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب تفاصيل الفرصة بنجاح.',
+                'data'    => $opportunity
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            Log::error("API Show Opportunity Error ID {$id}: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء جلب بيانات الفرصة.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
     /**
      * API: إنشاء فرصة تطوعية جديدة (مع إمكانية دعوة متطوعين)
      */
@@ -294,5 +380,5 @@ class VolunteerOpportunityController extends Controller
         }
     }
 
-    
+
 }
