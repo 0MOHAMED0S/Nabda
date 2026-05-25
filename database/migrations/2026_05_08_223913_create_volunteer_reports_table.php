@@ -14,9 +14,14 @@ return new class extends Migration
             $table->foreignId('volunteer_id')->constrained('volunteers')->cascadeOnDelete();
             $table->foreignId('volunteer_opportunity_id')->constrained('volunteer_opportunities')->cascadeOnDelete();
 
-            $table->decimal('hours', 5, 2); // كم ساعة تطوعت اليوم؟ (يدعم الكسور مثل 4.5 ساعات)
-            $table->text('summary'); // ماذا أنجزت؟
-            $table->json('images')->nullable(); // صور التوثيق (مصفوفة مسارات الصور)
+            $table->decimal('hours', 5, 2); // الساعات المدخلة (ويمكن للمؤسسة تعديلها)
+            $table->text('summary');
+            $table->json('images')->nullable();
+
+            // 🎯 الحقول الجديدة لدعم شاشة التقييم
+            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending'); // حالة التقرير
+            $table->integer('rating')->nullable(); // التقييم بالنجوم (1 إلى 5)
+            $table->text('feedback_message')->nullable(); // رسالة المؤسسة للمتطوع
 
             $table->timestamps();
         });

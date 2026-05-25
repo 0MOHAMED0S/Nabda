@@ -13,8 +13,8 @@ return new class extends Migration
             $table->foreignId('volunteer_opportunity_id')->constrained('volunteer_opportunities')->cascadeOnDelete();
             $table->foreignId('volunteer_id')->constrained('volunteers')->cascadeOnDelete();
 
-            // حالة طلب التطوع (مقبول، مرفوض، قيد الانتظار)
-            $table->enum('status', ['pending', 'accepted', 'rejected', 'attended'])->default('pending');
+            // 🎯 تم تحديث الحالات لتتوافق مع المنطق الجديد (مقدم بنفسه، مدعو، مقبول، مرفوض، حضر)
+            $table->enum('status', ['applied', 'invited', 'accepted', 'rejected', 'attended'])->default('applied');
 
             $table->timestamps();
         });

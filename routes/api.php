@@ -25,6 +25,9 @@ use App\Http\Controllers\Api\Foundation\VolunteerOpportunityController;
 use App\Http\Controllers\Api\Public\DonationController;
 use App\Http\Controllers\Api\Services\ServiceController;
 use App\Http\Controllers\Api\Zakat\ZakatController;
+use App\Http\Controllers\Api\Foundation\OpportunityApplicationController;
+use App\Http\Controllers\Api\Foundation\OpportunityReportEvaluationController;
+use App\Http\Controllers\Api\Foundation\FoundationDashboardController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -112,6 +115,23 @@ Route::prefix('foundation')->group(function () {
 
         Route::get('/volunteers', [FoundationVolunteerController::class, 'index']); // جلب الجدول والإحصائيات
         Route::patch('/volunteers/{id}/toggle-status', [FoundationVolunteerController::class, 'toggleStatus']); // تفعيل وإيقاف المتطوع
+
+
+        // ... داخل مجموعة مسارات المؤسسة (Foundation) ...
+
+        // 🎯 مسارات إدارة طلبات الفرص التطوعية
+        Route::get('/opportunities/{id}/applications', [OpportunityApplicationController::class, 'index']); // جلب الطلبات والمسجلين
+        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/accept', [OpportunityApplicationController::class, 'accept']); // قبول
+        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/reject', [OpportunityApplicationController::class, 'reject']); // رفض
+
+
+// 🎯 مسارات تقييم تقارير المتطوعين
+Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
+Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
+
+
+// 🎯 لوحة التحكم الرئيسية للمؤسسة
+Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
     });
 });
 
@@ -135,6 +155,10 @@ Route::prefix('user')->group(function () {
 use App\Http\Controllers\Api\Volunteer\VolunteerAuthController;
 use App\Http\Controllers\Api\Volunteer\VolunteerPasswordController;
 use App\Http\Controllers\Api\Volunteer\VolunteerProfileController;
+use App\Http\Controllers\Api\Volunteer\CompletedActivityController;
+use App\Http\Controllers\Api\Volunteer\VolunteerHoursController;
+use App\Http\Controllers\Api\Volunteer\VolunteerRatingController;
+use App\Http\Controllers\Api\Volunteer\VolunteerDashboardController;
 
 Route::prefix('volunteer')->group(function () {
     Route::post('/register', [VolunteerAuthController::class, 'register']);
@@ -150,7 +174,22 @@ Route::prefix('volunteer')->group(function () {
         Route::get('/explore-opportunities/{id}', [ExploreOpportunityController::class, 'show']);
         Route::post('/explore-opportunities/{id}/apply', [ExploreOpportunityController::class, 'apply']);
         Route::post('/explore-opportunities/{id}/cancel', [ExploreOpportunityController::class, 'cancel']);
+        // 🎯 قبول ورفض الدعوات
+        Route::post('/explore-opportunities/{id}/accept', [\App\Http\Controllers\Api\Volunteer\VolunteerOpportunityController::class, 'acceptInvitation']);
+        Route::post('/explore-opportunities/{id}/reject', [\App\Http\Controllers\Api\Volunteer\VolunteerOpportunityController::class, 'rejectInvitation']);
         Route::post('/explore-opportunities/{id}/report', [ExploreOpportunityController::class, 'submitReport']);
         Route::get('/my-tasks', [ExploreOpportunityController::class, 'myTasks']);
+
+// 🎯 الأنشطة المنتهية للمتطوع (سجل الإنجازات والتقييمات)
+Route::get('/completed-activities', [CompletedActivityController::class, 'index']);
+
+// 🎯 سجل الساعات التطوعية والتأثير المجتمعي
+Route::get('/hours-record', [VolunteerHoursController::class, 'index']);
+
+// 🎯 تقييم التطوع وآراء المؤسسات
+Route::get('/ratings', [VolunteerRatingController::class, 'index']);
+
+// 🎯 لوحة التحكم الرئيسية للمتطوع
+Route::get('/dashboard', [VolunteerDashboardController::class, 'index']);
     });
 });

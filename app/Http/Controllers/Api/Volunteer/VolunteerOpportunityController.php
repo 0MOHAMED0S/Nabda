@@ -11,8 +11,8 @@ use Exception;
 
 class VolunteerOpportunityController extends Controller
 {
-    /**
-     * API: عرض جميع الفرص التطوعية المتاحة (مع حالة المتطوع الحالي)
+/**
+     * API: عرض جميع الفرص التطوعية المتاحة (مع حالة المتطوع الحالي) بدون Pagination
      */
     public function index(Request $request): JsonResponse
     {
@@ -28,11 +28,12 @@ class VolunteerOpportunityController extends Controller
                           ->select('volunteers.id'); // لا نحتاج كل بيانات المتطوع، فقط الـ ID والحالة من الـ Pivot
                 }])
                 ->orderBy('date', 'asc') // ترتيب بالأقرب تاريخاً
-                ->paginate(9); // 9 لكي تظهر كشبكة متناسقة (3 في كل صف) كما في الصورة
+                ->get(); // 👈 تم استبدال paginate(9) بـ get()
 
             // 🧹 تهيئة البيانات لتكون سهلة جداً على مطور الواجهة (Frontend)
-            $opportunities->getCollection()->transform(function ($opportunity) {
-                // إعداد رابط لوجو المؤسسة
+            // نستخدم transform مباشرة على المجموعة (Collection) المرجعة من get()
+            $opportunities->transform(function ($opportunity) {
+                // إعداد رابط لوجو المؤسسة (Full URL)
                 if ($opportunity->foundation) {
                     $opportunity->foundation->logo_url = $opportunity->foundation->logo
                         ? asset('storage/' . $opportunity->foundation->logo)
@@ -43,8 +44,12 @@ class VolunteerOpportunityController extends Controller
                 // 🎯 استخراج حالة المتطوع الحالي في هذه الفرصة
                 $application = $opportunity->volunteers->first();
 
-                // إضافة حقل جديد للـ JSON يخبر الواجهة بحالة التقديم:
-                // null (لم يتقدم), pending (في انتظار الموافقة), accepted (مقبول), rejected (مرفوض)
+                // إضافة حقل جديد للـ JSON يخبر الواجهة بحالة التقديم (المنطق الجديد):
+                // null (لم يتقدم)
+                // applied (قدم بنفسه - في انتظار الموافقة)
+                // invited (المؤسسة دعته - يجب أن يقبل أو يرفض)
+                // accepted (مقبول)
+                // rejected (مرفوض)
                 $opportunity->user_application_status = $application ? $application->pivot->status : null;
 
                 // تنظيف المصفوفة من العلاقة الثقيلة لأننا أخذنا الخلاصة
@@ -69,7 +74,7 @@ class VolunteerOpportunityController extends Controller
     }
 
     /**
-     * API: التقديم على فرصة تطوعية
+     * API: التقديم على فرصة تطوعية (مبادرة من المتطوع)
      */
     public function apply(Request $request, $id): JsonResponse
     {
@@ -86,18 +91,18 @@ class VolunteerOpportunityController extends Controller
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // التأكد من أن المتطوع لم يتقدم مسبقاً
+            // التأكد من أن المتطوع لم يتقدم مسبقاً (سواء قدم بنفسه أو تمت دعوته)
             $alreadyApplied = $opportunity->volunteers()->where('volunteer_id', $volunteerId)->exists();
 
             if ($alreadyApplied) {
                 return response()->json([
                     'status'  => false,
-                    'message' => 'لقد قمت بالتقديم على هذه الفرصة مسبقاً.'
+                    'message' => 'أنت مسجل بالفعل في هذه الفرصة أو لديك دعوة معلقة.'
                 ], 400, [], JSON_UNESCAPED_UNICODE); // 400 Bad Request
             }
 
-            // 🎯 تسجيل المتطوع في الفرصة بحالة (قيد الانتظار)
-            $opportunity->volunteers()->attach($volunteerId, ['status' => 'pending']);
+            // 🎯 تسجيل المتطوع في الفرصة بحالة (applied) لأنه هو من بادر بالتقديم
+            $opportunity->volunteers()->attach($volunteerId, ['status' => 'applied']);
 
             return response()->json([
                 'status'  => true,
@@ -110,6 +115,78 @@ class VolunteerOpportunityController extends Controller
                 'status'  => false,
                 'message' => 'حدث خطأ أثناء التقديم على الفرصة.'
             ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * API: قبول دعوة التطوع (عندما ترسل المؤسسة دعوة للمتطوع)
+     */
+    public function acceptInvitation(Request $request, $id): JsonResponse
+    {
+        try {
+            $volunteerId = $request->user()->id;
+            $opportunity = VolunteerOpportunity::find($id);
+
+            if (!$opportunity) {
+                return response()->json(['status' => false, 'message' => 'الفرصة غير موجودة.'], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            $application = $opportunity->volunteers()->where('volunteer_id', $volunteerId)->first();
+
+            if (!$application || $application->pivot->status !== 'invited') {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'لا توجد دعوة معلقة لك لهذه الفرصة.'
+                ], 400, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // تحويل الحالة من invited إلى accepted
+            $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'accepted']);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم قبول الدعوة بنجاح! يسعدنا انضمامك للفرصة.'
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            Log::error("API Volunteer Accept Invitation Error: " . $e->getMessage());
+            return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء قبول الدعوة.'], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * API: رفض دعوة التطوع
+     */
+    public function rejectInvitation(Request $request, $id): JsonResponse
+    {
+        try {
+            $volunteerId = $request->user()->id;
+            $opportunity = VolunteerOpportunity::find($id);
+
+            if (!$opportunity) {
+                return response()->json(['status' => false, 'message' => 'الفرصة غير موجودة.'], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            $application = $opportunity->volunteers()->where('volunteer_id', $volunteerId)->first();
+
+            if (!$application || $application->pivot->status !== 'invited') {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'لا توجد دعوة معلقة لك لهذه الفرصة.'
+                ], 400, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // تحويل الحالة من invited إلى rejected
+            $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'rejected']);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم رفض الدعوة.'
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            Log::error("API Volunteer Reject Invitation Error: " . $e->getMessage());
+            return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء رفض الدعوة.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -139,7 +216,7 @@ class VolunteerOpportunityController extends Controller
                 ], 400, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 🎯 حذف تسجيل المتطوع من الفرصة (Detach)
+            // 🎯 حذف تسجيل المتطوع من الفرصة كلياً (Detach)
             $opportunity->volunteers()->detach($volunteerId);
 
             return response()->json([
