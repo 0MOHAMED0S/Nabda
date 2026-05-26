@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\Zakat\ZakatController;
 use App\Http\Controllers\Api\Foundation\OpportunityApplicationController;
 use App\Http\Controllers\Api\Foundation\OpportunityReportEvaluationController;
 use App\Http\Controllers\Api\Foundation\FoundationDashboardController;
+use App\Http\Controllers\Api\Public\FoundationRatingController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -42,6 +43,8 @@ Route::get('/hero', [HeroController::class, 'index']);
 //tricker
 Route::get('/tickers', [TickerController::class, 'index']);
 
+// 🎯 إضافة تقييم لمؤسسة (متاح للجميع: زوار ومسجلين)
+Route::post('/foundations/{foundationId}/rate', [FoundationRatingController::class, 'store']);
 
 Route::prefix('about-us')->group(function () {
     Route::get('/info', [AboutUsController::class, 'getAboutInfo']);
@@ -115,8 +118,10 @@ Route::prefix('foundation')->group(function () {
 
         Route::get('/volunteers', [FoundationVolunteerController::class, 'index']); // جلب الجدول والإحصائيات
         Route::patch('/volunteers/{id}/toggle-status', [FoundationVolunteerController::class, 'toggleStatus']); // تفعيل وإيقاف المتطوع
-
-
+        // 🎯 عرض الملف الشخصي لمتطوع محدد (تفاصيل المتطوع)
+        Route::get('/volunteers/{id}', [FoundationVolunteerController::class, 'show']);
+        // 🎯 عرض تفاصيل نشاط تطوعي محدد (تقرير منتهي)
+        Route::get('/activities/{reportId}/details', [FoundationVolunteerController::class, 'showActivityDetails']);
         // ... داخل مجموعة مسارات المؤسسة (Foundation) ...
 
         // 🎯 مسارات إدارة طلبات الفرص التطوعية
@@ -125,13 +130,13 @@ Route::prefix('foundation')->group(function () {
         Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/reject', [OpportunityApplicationController::class, 'reject']); // رفض
 
 
-// 🎯 مسارات تقييم تقارير المتطوعين
-Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
-Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
+        // 🎯 مسارات تقييم تقارير المتطوعين
+        Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
+        Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
 
 
-// 🎯 لوحة التحكم الرئيسية للمؤسسة
-Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
+        // 🎯 لوحة التحكم الرئيسية للمؤسسة
+        Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
     });
 });
 
@@ -180,16 +185,16 @@ Route::prefix('volunteer')->group(function () {
         Route::post('/explore-opportunities/{id}/report', [ExploreOpportunityController::class, 'submitReport']);
         Route::get('/my-tasks', [ExploreOpportunityController::class, 'myTasks']);
 
-// 🎯 الأنشطة المنتهية للمتطوع (سجل الإنجازات والتقييمات)
-Route::get('/completed-activities', [CompletedActivityController::class, 'index']);
+        // 🎯 الأنشطة المنتهية للمتطوع (سجل الإنجازات والتقييمات)
+        Route::get('/completed-activities', [CompletedActivityController::class, 'index']);
 
-// 🎯 سجل الساعات التطوعية والتأثير المجتمعي
-Route::get('/hours-record', [VolunteerHoursController::class, 'index']);
+        // 🎯 سجل الساعات التطوعية والتأثير المجتمعي
+        Route::get('/hours-record', [VolunteerHoursController::class, 'index']);
 
-// 🎯 تقييم التطوع وآراء المؤسسات
-Route::get('/ratings', [VolunteerRatingController::class, 'index']);
+        // 🎯 تقييم التطوع وآراء المؤسسات
+        Route::get('/ratings', [VolunteerRatingController::class, 'index']);
 
-// 🎯 لوحة التحكم الرئيسية للمتطوع
-Route::get('/dashboard', [VolunteerDashboardController::class, 'index']);
+        // 🎯 لوحة التحكم الرئيسية للمتطوع
+        Route::get('/dashboard', [VolunteerDashboardController::class, 'index']);
     });
 });

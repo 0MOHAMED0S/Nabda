@@ -28,7 +28,7 @@ class ExploreOpportunityController extends Controller
                 ->with(['foundation:id,name,logo'])
                 ->with(['volunteers' => function ($query) use ($volunteerId) {
                     $query->where('volunteer_id', $volunteerId)
-                          ->select('volunteers.id');
+                    ->select('volunteers.id');
                 }])
                 ->orderBy('date', 'asc')
                 ->get(); // 👈 تم استبدال paginate(9) بـ get()
