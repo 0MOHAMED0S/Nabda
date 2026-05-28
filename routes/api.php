@@ -57,6 +57,8 @@ Route::prefix('about-us')->group(function () {
 Route::prefix('services')->group(function () {
     Route::get('/categories', [ServiceController::class, 'index']);
     Route::get('/all', [ServiceController::class, 'allServices']);
+    Route::get('/{serviceId}/cases', [ServiceController::class, 'getServiceCases']);
+    Route::get('/{serviceId}', [ServiceController::class, 'show']);
 });
 Route::prefix('articles')->group(function () {
     Route::get('/', [ArticleController::class, 'index']);
@@ -76,6 +78,14 @@ Route::get('foundation/{id}/show', [FoundationController::class, 'show']);
 Route::get('/foundation/{id}/cases', [FoundationController::class, 'getFoundationCases']);
 Route::get('/cases/{caseId}', [FoundationController::class, 'getCaseDetails']);
 
+Route::middleware('auth:sanctum')->group(function () {
+    // 🎯 جلب سجل تبرعات المستخدم الحالي وإحصائياته (للوحة التحكم)
+    Route::get('/user/donations', [DonationController::class, 'index']);
+});
+// 🎯 جلب خدمات/حملات المؤسسة (التبويب الثاني في بروفايل المؤسسة)
+Route::get('/foundations/{id}/services', [FoundationController::class, 'getFoundationServices']);
+// 🎯 جلب معلومات الاتصال والفروع الخاصة بمؤسسة (التبويب الأخير)
+Route::get('/foundations/{id}/contact', [FoundationController::class, 'getContactDetails']);
 Route::prefix('foundation')->group(function () {
     Route::post('/register', [FoundationAuthController::class, 'register']);
     Route::post('/login', [FoundationAuthController::class, 'login']);

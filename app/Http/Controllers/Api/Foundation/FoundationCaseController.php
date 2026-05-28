@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 class FoundationCaseController extends Controller
 {
@@ -19,7 +21,11 @@ class FoundationCaseController extends Controller
     {
         return [
             'title.required'               => 'عنوان الحالة مطلوب.',
-            'campaign_type.required'       => 'يرجى اختيار نوع الحملة.',
+
+            // 🎯 تم التصحيح هنا: استبدال campaign_type بـ service_id
+            'service_id.required'          => 'يرجى اختيار الخدمة المرتبطة بهذه الحالة.',
+            'service_id.exists'            => 'الخدمة المختارة غير صالحة أو غير موجودة.',
+
             'main_description.required'    => 'الوصف الرئيسي للحالة مطلوب.',
 
             'beneficiary_name.required'    => 'اسم المستفيد مطلوب.',
@@ -49,13 +55,14 @@ class FoundationCaseController extends Controller
         ];
     }
 
-    /** 1. جلب كل الحالات */
-/** 1. جلب كل الحالات (مع الإحصائيات وكل تفاصيل الحالة) */
+    /** 1. جلب كل الحالات (مع الإحصائيات وكل تفاصيل الحالة) */
 
-public function index(Request $request)
+    public function index(Request $request)
     {
         try {
+            // 1. 🎯 تحديث الاستعلام لجلب الخدمة + تصنيف الخدمة (Nested Relationship)
             $cases = $request->user()->cases()
+                ->with('service.category') // 👈 جلب الخدمة والتصنيف معاً
                 ->withCount(['donations as donors_count' => function ($query) {
                     $query->where('status', 'completed');
                 }])
@@ -86,20 +93,41 @@ public function index(Request $request)
                 // تحويل جميع بيانات الحالة الأصلية إلى مصفوفة
                 $caseData = $case->toArray();
 
-                // 🎯 تحويل مسارات الملفات إلى روابط كاملة (Full URLs)
-                if (is_array($caseData['images'])) {
-                    $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+                // 2. 🎯 تجهيز بيانات الخدمة وتصنيفها
+                if ($case->service) {
+                    $caseData['campaign_type']    = $case->service->title; // للحفاظ على توافق الفرونت إند
+                    $caseData['service_name']     = $case->service->title;
+                    $caseData['service_date']     = $case->service->created_at ? $case->service->created_at->format('Y-m-d') : null;
+
+                    // استخراج اسم التصنيف من العلاقة المتداخلة
+                    $caseData['service_category'] = $case->service->category ? $case->service->category->name : 'غير مصنف';
+                } else {
+                    $caseData['campaign_type']    = 'خدمة عامة';
+                    $caseData['service_name']     = 'غير محدد';
+                    $caseData['service_date']     = null;
+                    $caseData['service_category'] = 'غير مصنف';
                 }
 
-                if (is_array($caseData['documents'])) {
-                    $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+                // 3. تحويل مسارات الملفات إلى روابط كاملة (Full URLs)
+                if (isset($caseData['images']) && is_array($caseData['images'])) {
+                    $caseData['images'] = array_map(function ($img) {
+                        return \Illuminate\Support\Str::startsWith($img, ['http://', 'https://']) ? $img : asset('storage/' . $img);
+                    }, $caseData['images']);
+                }
+
+                if (isset($caseData['documents']) && is_array($caseData['documents'])) {
+                    $caseData['documents'] = array_map(function ($doc) {
+                        return \Illuminate\Support\Str::startsWith($doc, ['http://', 'https://']) ? $doc : asset('storage/' . $doc);
+                    }, $caseData['documents']);
                 }
 
                 if (!empty($caseData['video'])) {
-                    $caseData['video'] = asset('storage/' . $caseData['video']);
+                    $caseData['video'] = \Illuminate\Support\Str::startsWith($caseData['video'], ['http://', 'https://'])
+                        ? $caseData['video']
+                        : asset('storage/' . $caseData['video']);
                 }
 
-                // إضافة الحسابات الإضافية للواجهة
+                // 4. إضافة الحسابات الإضافية للواجهة
                 $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
                 $caseData['collected_amount']      = $collected;
                 $caseData['completion_percentage'] = $percentage;
@@ -107,8 +135,11 @@ public function index(Request $request)
 
                 // إضافة صورة مصغرة للجدول برابط كامل
                 $caseData['thumbnail'] = (is_array($case->images) && count($case->images) > 0)
-                    ? asset('storage/' . $case->images[0])
+                    ? (\Illuminate\Support\Str::startsWith($case->images[0], ['http://', 'https://']) ? $case->images[0] : asset('storage/' . $case->images[0]))
                     : null;
+
+                // تنظيف العلاقة المضافة حتى لا تتكرر البيانات ككائن كامل داخل الرد
+                unset($caseData['service']);
 
                 return $caseData;
             });
@@ -119,19 +150,21 @@ public function index(Request $request)
                 'statistics' => $statistics,
                 'data'       => $formattedCases
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
-        } catch (Exception $e) {
-            Log::error("API Foundation Cases Index Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Cases Index Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب البيانات.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /** 2. إضافة حالة جديدة */
-public function store(Request $request)
+    public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'title'                  => 'required|string|max:255',
-            'campaign_type'          => 'required|string|max:255',
+
+            // 🎯 تم التصحيح: استبدال campaign_type بـ service_id والتحقق من وجوده في جدول الخدمات
+            'service_id'             => 'required|exists:services,id',
+
             'main_description'       => 'required|string',
             'additional_description' => 'nullable|string',
             'beneficiary_name'       => 'required|string|max:255',
@@ -153,16 +186,19 @@ public function store(Request $request)
         }
 
         try {
-            $data = $request->only(['title', 'campaign_type', 'main_description', 'additional_description', 'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority', 'end_date', 'goal_type', 'target_amount']);
+            // 🎯 تم التصحيح: إضافة service_id لمصفوفة البيانات التي سيتم حفظها
+            $data = $request->only(['title', 'service_id', 'main_description', 'additional_description', 'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority', 'end_date', 'goal_type', 'target_amount']);
 
             if ($data['goal_type'] === 'in-kind') $data['target_amount'] = null;
 
             if ($request->hasFile('images')) {
-                $paths = []; foreach ($request->file('images') as $img) $paths[] = $img->store('foundations/cases/images', 'public');
+                $paths = [];
+                foreach ($request->file('images') as $img) $paths[] = $img->store('foundations/cases/images', 'public');
                 $data['images'] = $paths;
             }
             if ($request->hasFile('documents')) {
-                $paths = []; foreach ($request->file('documents') as $doc) $paths[] = $doc->store('foundations/cases/documents', 'public');
+                $paths = [];
+                foreach ($request->file('documents') as $doc) $paths[] = $doc->store('foundations/cases/documents', 'public');
                 $data['documents'] = $paths;
             }
             if ($request->hasFile('video')) {
@@ -173,6 +209,11 @@ public function store(Request $request)
 
             // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
             $caseData = $case->toArray();
+
+            // 🎯 الحفاظ على توافق الفرونت إند في الـ Production:
+            // نجلب اسم الخدمة المرتبطة ونضعه في حقل "campaign_type" حتى لا ينهار الفرونت إند الذي يتوقع هذا الحقل
+            $caseData['campaign_type'] = $case->service ? $case->service->title : 'خدمة عامة';
+            unset($caseData['service']); // تنظيف لعدم تكرار البيانات
 
             if (isset($caseData['images']) && is_array($caseData['images'])) {
                 $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
@@ -187,19 +228,19 @@ public function store(Request $request)
             }
 
             return response()->json(['status' => true, 'message' => 'تم إضافة الحالة بنجاح.', 'data' => $caseData], 201, [], JSON_UNESCAPED_UNICODE);
-        } catch (Exception $e) {
-            Log::error("API Foundation Case Store Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Case Store Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء حفظ الحالة.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
-    /** 3. عرض حالة واحدة */
-/** 3. عرض حالة واحدة مع حساباتها */
-public function show(Request $request, $id)
+    /** 3. عرض حالة واحدة مع حساباتها */
+    public function show(Request $request, $id)
     {
         try {
-            // جلب الحالة مع حساب التبرعات الخاصة بها
+            // 1. 🎯 جلب الحالة مع حساب التبرعات وجلب علاقة الخدمة والتصنيف
             $case = $request->user()->cases()
+                ->with('service.category') // 👈 جلب الخدمة وتصنيفها
                 ->withCount(['donations as donors_count' => function ($query) {
                     $query->where('status', 'completed');
                 }])
@@ -225,38 +266,60 @@ public function show(Request $request, $id)
             // تجهيز البيانات النهائية
             $caseData = $case->toArray();
 
-            // 🎯 تحويل مسارات الملفات إلى روابط كاملة (Full URLs)
+            // 2. 🎯 تجهيز بيانات الخدمة وتصنيفها للفرونت إند (مهم جداً للإنتاج)
+            if ($case->service) {
+                $caseData['campaign_type']    = $case->service->title; // للحفاظ على التوافق
+                $caseData['service_name']     = $case->service->title;
+                $caseData['service_date']     = $case->service->created_at ? $case->service->created_at->format('Y-m-d') : null;
+                $caseData['service_category'] = $case->service->category ? $case->service->category->name : 'غير مصنف';
+            } else {
+                $caseData['campaign_type']    = 'خدمة عامة';
+                $caseData['service_name']     = 'غير محدد';
+                $caseData['service_date']     = null;
+                $caseData['service_category'] = 'غير مصنف';
+            }
+
+            // 3. 🎯 تحويل مسارات الملفات إلى روابط كاملة بأمان (Full URLs)
             if (isset($caseData['images']) && is_array($caseData['images'])) {
-                $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
+                $caseData['images'] = array_map(function ($img) {
+                    return \Illuminate\Support\Str::startsWith($img, ['http://', 'https://']) ? $img : asset('storage/' . $img);
+                }, $caseData['images']);
             }
 
             if (isset($caseData['documents']) && is_array($caseData['documents'])) {
-                $caseData['documents'] = array_map(fn($doc) => asset('storage/' . $doc), $caseData['documents']);
+                $caseData['documents'] = array_map(function ($doc) {
+                    return \Illuminate\Support\Str::startsWith($doc, ['http://', 'https://']) ? $doc : asset('storage/' . $doc);
+                }, $caseData['documents']);
             }
 
             if (!empty($caseData['video'])) {
-                $caseData['video'] = asset('storage/' . $caseData['video']);
+                $caseData['video'] = \Illuminate\Support\Str::startsWith($caseData['video'], ['http://', 'https://'])
+                    ? $caseData['video']
+                    : asset('storage/' . $caseData['video']);
             }
 
+            // 4. إضافة الحسابات الإضافية للواجهة
             $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
             $caseData['collected_amount']      = $collected;
             $caseData['completion_percentage'] = $percentage;
             $caseData['donors_count']          = $case->donors_count ?? 0;
+
+            // تنظيف الكائن الإضافي حتى لا يتكرر بالرد
+            unset($caseData['service']);
 
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب تفاصيل الحالة بنجاح.',
                 'data'    => $caseData
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
-        } catch (Exception $e) {
-            Log::error("API Foundation Case Show Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Case Show Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب بيانات الحالة.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /** 4. تحديث حالة (المُحسّنة والمحمية) */
-public function update(Request $request, $id)
+    public function update(Request $request, $id)
     {
         $case = $request->user()->cases()->find($id);
         if (!$case) return response()->json(['status' => false, 'message' => 'الحالة غير موجودة أو تم حذفها.'], 404, [], JSON_UNESCAPED_UNICODE);
@@ -307,9 +370,18 @@ public function update(Request $request, $id)
 
         try {
             $data = $request->only([
-                'title', 'campaign_type', 'main_description', 'additional_description',
-                'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority',
-                'end_date', 'goal_type', 'target_amount', 'status'
+                'title',
+                'campaign_type',
+                'main_description',
+                'additional_description',
+                'beneficiary_name',
+                'beneficiary_age',
+                'beneficiary_address',
+                'priority',
+                'end_date',
+                'goal_type',
+                'target_amount',
+                'status'
             ]);
 
             // 🛡️ تنظيف البيانات: التأكد من تصفير المبلغ في حال كان الهدف النهائي عيني
@@ -351,7 +423,6 @@ public function update(Request $request, $id)
             }
 
             return response()->json(['status' => true, 'message' => 'تم تحديث بيانات الحالة بنجاح.', 'data' => $caseData], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Foundation Case Update Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء التحديث.'], 500, [], JSON_UNESCAPED_UNICODE);
@@ -378,7 +449,6 @@ public function update(Request $request, $id)
     }
 
     /** 6. حذف ملف محدد (صورة/مستند/فيديو) */
-/** 6. حذف ملف محدد (صورة/مستند/فيديو) */
     public function deleteFile(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
@@ -458,7 +528,6 @@ public function update(Request $request, $id)
 
             // إذا لم يتم العثور على التطابق بعد التنظيف
             return response()->json(['status' => false, 'message' => 'الملف المطلوب غير موجود في هذه الحالة.'], 404);
-
         } catch (Exception $e) {
             Log::error("API Foundation Case Delete File Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء محاولة حذف الملف.'], 500);
@@ -506,7 +575,6 @@ public function update(Request $request, $id)
                 'message' => 'تم تحديث حالة الحملة بنجاح.',
                 'data'    => $case
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Case Update Status Error: " . $e->getMessage());
             return response()->json([

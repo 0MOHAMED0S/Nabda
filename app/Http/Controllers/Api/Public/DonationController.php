@@ -11,6 +11,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Carbon;
 
 class DonationController extends Controller
 {
@@ -246,5 +248,138 @@ class DonationController extends Controller
         }
 
         return response()->json(['message' => 'Processed'], 200);
+    }
+
+public function index(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->user()->id;
+
+            // 1. حساب الإحصائيات العلوية (المربعات الثلاثة)
+            // إجمالي التبرعات المالية المكتملة
+            $totalAmount = Donation::where('user_id', $userId)
+                ->where('donation_type', 'financial')
+                ->where('status', 'completed')
+                ->sum('amount');
+
+            // عدد العمليات (التبرعات الكلية)
+            $totalOperations = Donation::where('user_id', $userId)->count();
+
+            // جلب تاريخ آخر تبرع لحساب "منذ يومين" مثلاً
+            $lastDonation = Donation::where('user_id', $userId)->latest()->first();
+            $lastDonationTime = $lastDonation ? $lastDonation->created_at->diffForHumans() : 'لا يوجد تفاعل بعد';
+
+            // أكبر تبرع مالي
+            $largestDonationRecord = Donation::with('foundation')
+                ->where('user_id', $userId)
+                ->where('donation_type', 'financial')
+                ->where('status', 'completed')
+                ->orderByDesc('amount')
+                ->first();
+
+            $largestDonationAmount = $largestDonationRecord ? $largestDonationRecord->amount : 0;
+            $largestDonationFoundation = ($largestDonationRecord && $largestDonationRecord->foundation)
+                ? $largestDonationRecord->foundation->name
+                : 'غير محدد';
+
+            $stats = [
+                'total_amount'                => $totalAmount,
+                'total_operations'            => $totalOperations,
+                'last_donation_time'          => $lastDonationTime,
+                'largest_donation_amount'     => $largestDonationAmount,
+                'largest_donation_foundation' => 'لجمعية ' . $largestDonationFoundation,
+            ];
+
+            // 2. بناء الاستعلام الأساسي للجدول
+            $query = Donation::with(['foundation:id,name', 'foundationCase:id,title'])
+                ->where('user_id', $userId);
+
+            // -- الفلترة (بحث بالاسم، نوع التبرع، أو التاريخ) --
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('donor_name', 'like', "%{$search}%")
+                      ->orWhereHas('foundation', function ($fQ) use ($search) {
+                          $fQ->where('name', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+            if ($request->filled('type') && in_array($request->type, ['financial', 'in-kind'])) {
+                $query->where('donation_type', $request->type);
+            }
+
+            // 3. جلب البيانات دفعة واحدة (بدون Pagination)
+            $donations = $query->orderBy('created_at', 'desc')->get();
+
+            // 4. تنسيق البيانات لتتطابق مع تصميم الجدول في الصورة
+            $donations->transform(function ($donation) {
+
+                // تحديد التفاصيل بناءً على نوع التبرع
+                $isFinancial = $donation->donation_type === 'financial';
+
+                // عنوان التفاصيل (مثال: 500 ج.م أو مواد غذائية)
+                $detailsTitle = $isFinancial
+                    ? number_format($donation->amount) . ' ج.م'
+                    : ($donation->item_category ?? 'مواد عينية');
+
+                // وصف التفاصيل الفرعي
+                if ($isFinancial) {
+                    $targetName = $donation->foundationCase ? $donation->foundationCase->title : ($donation->foundation->name ?? 'مؤسسة عامة');
+                    $detailsSubtitle = "تبرع نقدي لصالح " . $targetName;
+                } else {
+                    $detailsSubtitle = $donation->item_description ?? 'بدون تفاصيل إضافية';
+                }
+
+                // طريقة الدفع / التسليم
+                $method = $isFinancial
+                    ? ($donation->payment_method ?? 'غير محدد')
+                    : ($donation->delivery_method ?? 'غير محدد');
+
+                // ترجمة الحالة لتلوين الشارة
+                $statusAr = match ($donation->status) {
+                    'completed' => 'مكتمل',
+                    'pending'   => 'قيد المراجعة',
+                    'processing'=> 'جاري', // تظهر في الصورة كـ "جاري"
+                    'cancelled' => 'ملغي',
+                    default     => 'غير محدد'
+                };
+
+                return [
+                    'id'               => $donation->id,
+                    'foundation_name'  => $donation->foundation->name ?? 'مؤسسة محذوفة',
+                    'donor_name'       => $donation->donor_name ?? 'فاعل خير',
+
+                    'type_en'          => $donation->donation_type, // للفرونت إند لمعرفة الأيقونة
+                    'type_ar'          => $isFinancial ? 'مالي' : 'عيني',
+
+                    'details_title'    => $detailsTitle,
+                    'details_subtitle' => $detailsSubtitle,
+
+                    'method'           => $method, // مثال: بطاقة ائتمان / توصيل للمقر
+
+                    'date'             => Carbon::parse($donation->created_at)->translatedFormat('d F Y'), // مثال: 20 أكتوبر 2023
+
+                    'status_en'        => $donation->status,
+                    'status_ar'        => $statusAr,
+                ];
+            });
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب سجل التبرعات بنجاح.',
+                'data'    => [
+                    'stats'     => $stats,
+                    'donations' => $donations // مصفوفة عادية تحتوي على التبرعات مباشرة
+                ]
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            Log::error("API User Donations Index Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء جلب سجل التبرعات.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
     }
 }

@@ -14,7 +14,7 @@ return new class extends Migration
 
             // 1. البيانات الأساسية
             $table->string('title');
-            $table->string('campaign_type');
+            $table->foreignId('service_id')->constrained('services')->cascadeOnDelete();
             $table->text('main_description');
             $table->text('additional_description')->nullable();
             $table->string('beneficiary_name');

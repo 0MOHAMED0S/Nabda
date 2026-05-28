@@ -12,4 +12,8 @@ class Service extends Model
     {
         return $this->belongsTo(Category::class);
     }
+    public function foundationCases()
+    {
+        return $this->hasMany(FoundationCase::class);
+    }
 }

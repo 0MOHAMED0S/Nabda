@@ -14,7 +14,7 @@ class FoundationCase extends Model
         'title', 'campaign_type', 'main_description', 'additional_description',
         'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority',
         'end_date', 'goal_type', 'target_amount',
-        'images', 'documents', 'video', 'status'
+        'images', 'documents', 'video', 'status','service_id'
     ];
 
     protected $casts = [
@@ -36,5 +36,9 @@ class FoundationCase extends Model
     public function updates()
     {
         return $this->hasMany(CaseUpdate::class, 'foundation_case_id')->orderBy('update_date', 'desc');
+    }
+    public function service()
+    {
+        return $this->belongsTo(Service::class);
     }
 }

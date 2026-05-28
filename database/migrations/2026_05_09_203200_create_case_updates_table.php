@@ -10,15 +10,10 @@ return new class extends Migration
     {
         Schema::create('case_updates', function (Blueprint $table) {
             $table->id();
-
-            // الربط بجدول الحالات
             $table->foreignId('foundation_case_id')->constrained('foundation_cases')->cascadeOnDelete();
-
-            // بيانات التحديث بناءً على الصورة
             $table->string('title'); // عنوان التحديث
             $table->date('update_date'); // تاريخ التحديث
             $table->text('description'); // وصف التحديث
-
             $table->timestamps();
         });
     }
