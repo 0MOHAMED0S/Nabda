@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin\Volunteer;
 
 use App\Http\Controllers\Controller;
+use App\Mail\VolunteerStatusUpdated;
 use App\Models\Volunteer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Exception;
+use Illuminate\Support\Facades\Mail;
 
 class VolunteerController extends Controller
 {
@@ -37,7 +39,7 @@ class VolunteerController extends Controller
     /**
      * تحديث بيانات المتطوع وحالة الاعتماد
      */
-    public function update(Request $request, Volunteer $volunteer)
+public function update(Request $request, Volunteer $volunteer)
     {
         try {
             $request->validate([
@@ -73,6 +75,12 @@ class VolunteerController extends Controller
                 'address'
             ]));
 
+            // 🎯 إضافة إرسال الإيميل في الخلفية
+            // نتحقق أولاً مما إذا كانت حالة التطوع (status) قد تغيرت في هذا التعديل
+            if ($volunteer->wasChanged('status') && !empty($volunteer->email)) {
+                Mail::to($volunteer->email)->queue(new VolunteerStatusUpdated($volunteer));
+            }
+
             return back()->with('success', 'تم تحديث بيانات وحالة المتطوع بنجاح.');
         } catch (Exception $e) {
             Log::error("Volunteer Update Error ID {$volunteer->id}: " . $e->getMessage());
@@ -89,6 +97,11 @@ class VolunteerController extends Controller
             $volunteer->update([
                 'status' => 'rejected'
             ]);
+
+            // 🎯 إرسال إيميل الرفض للمتطوع في الخلفية لتجنب بطء السيرفر
+            if (!empty($volunteer->email)) {
+                Mail::to($volunteer->email)->queue(new VolunteerStatusUpdated($volunteer));
+            }
 
             return back()->with('success', 'تم رفض طلب التطوع بنجاح.');
         } catch (Exception $e) {

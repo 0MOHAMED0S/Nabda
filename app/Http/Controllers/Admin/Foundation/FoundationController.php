@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin\Foundation;
 
 use App\Http\Controllers\Controller;
+use App\Mail\FoundationStatusUpdated;
 use App\Models\Foundation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Exception;
+use Illuminate\Support\Facades\Mail;
 
 class FoundationController extends Controller
 {
@@ -38,7 +40,7 @@ class FoundationController extends Controller
     /**
      * تحديث بيانات المؤسسة وحالة الاعتماد
      */
-    public function update(Request $request, Foundation $foundation)
+public function update(Request $request, Foundation $foundation)
     {
         try {
             $request->validate([
@@ -72,6 +74,17 @@ class FoundationController extends Controller
                 'license_number',
                 'supervising_authority'
             ]));
+
+            // 🎯 إضافة إرسال الإيميل هنا
+            // نتحقق أولاً مما إذا كانت "حالة الاعتماد" قد تغيرت فعلياً في هذا التحديث لتجنب الإرسال المزعج
+            if ($foundation->wasChanged('approval_status') && !empty($foundation->email)) {
+                Mail::to($foundation->email)->send(new FoundationStatusUpdated($foundation));
+            }
+
+            // 🎯 تم استبدال send() بـ queue() لإرسال الإيميل في الخلفية وعدم تعطيل النظام
+            // if ($foundation->wasChanged('approval_status') && !empty($foundation->email)) {
+            //     Mail::to($foundation->email)->queue(new FoundationStatusUpdated($foundation));
+            // }
 
             return back()->with('success', 'تم تحديث بيانات واعتماد المؤسسة بنجاح.');
         } catch (Exception $e) {

@@ -29,10 +29,16 @@ use App\Http\Controllers\Api\Foundation\OpportunityApplicationController;
 use App\Http\Controllers\Api\Foundation\OpportunityReportEvaluationController;
 use App\Http\Controllers\Api\Foundation\FoundationDashboardController;
 use App\Http\Controllers\Api\Public\FoundationRatingController;
+use App\Http\Controllers\Api\Public\PublicCaseController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+use App\Http\Controllers\Api\Public\PlatformStatisticsController;
+
+// 🎯 جلب إحصائيات المنصة العامة (للرئيسية)
+Route::get('/statistics', [PlatformStatisticsController::class, 'index']);
 
 
 //reviews
@@ -45,6 +51,13 @@ Route::get('/tickers', [TickerController::class, 'index']);
 
 // 🎯 إضافة تقييم لمؤسسة (متاح للجميع: زوار ومسجلين)
 Route::post('/foundations/{foundationId}/rate', [FoundationRatingController::class, 'store']);
+
+
+// 🎯 جلب جميع الحالات (لصفحة استكشاف الحالات)
+Route::get('/cases', [PublicCaseController::class, 'index']);
+// 🎯 جلب تفاصيل حالة محددة بالكامل
+Route::get('/cases/{id}', [PublicCaseController::class, 'show']);
+
 
 Route::prefix('about-us')->group(function () {
     Route::get('/info', [AboutUsController::class, 'getAboutInfo']);
