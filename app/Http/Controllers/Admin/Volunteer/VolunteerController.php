@@ -78,7 +78,7 @@ public function update(Request $request, Volunteer $volunteer)
             // 🎯 إضافة إرسال الإيميل في الخلفية
             // نتحقق أولاً مما إذا كانت حالة التطوع (status) قد تغيرت في هذا التعديل
             if ($volunteer->wasChanged('status') && !empty($volunteer->email)) {
-                Mail::to($volunteer->email)->queue(new VolunteerStatusUpdated($volunteer));
+                Mail::to($volunteer->email)->send(new VolunteerStatusUpdated($volunteer));
             }
 
             return back()->with('success', 'تم تحديث بيانات وحالة المتطوع بنجاح.');
@@ -100,7 +100,7 @@ public function update(Request $request, Volunteer $volunteer)
 
             // 🎯 إرسال إيميل الرفض للمتطوع في الخلفية لتجنب بطء السيرفر
             if (!empty($volunteer->email)) {
-                Mail::to($volunteer->email)->queue(new VolunteerStatusUpdated($volunteer));
+                Mail::to($volunteer->email)->send(new VolunteerStatusUpdated($volunteer));
             }
 
             return back()->with('success', 'تم رفض طلب التطوع بنجاح.');

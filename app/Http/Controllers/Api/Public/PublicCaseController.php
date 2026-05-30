@@ -101,7 +101,7 @@ class PublicCaseController extends Controller
     /**
      * API 2: عرض تفاصيل الحالة بالكامل (للشاشة الفردية - الصورة الثانية)
      */
-    public function show($id): JsonResponse
+public function show($id): JsonResponse
     {
         try {
             // 1. استعلام شامل يجلب الحالة بكل تفاصيلها (المؤسسة، التحديثات، الخدمة، التبرعات)
@@ -151,7 +151,8 @@ class PublicCaseController extends Controller
                     return [
                         'name'     => $donor->donor_name ?? 'فاعل خير',
                         'amount'   => $donor->amount,
-                        'time_ago' => $donor->created_at->diffForHumans(),
+                        // 🎯 تم إضافة locale('ar') هنا لضمان الترجمة الصحيحة إلى العربية
+                        'time_ago' => Carbon::parse($donor->created_at)->locale('ar')->diffForHumans(),
                     ];
                 });
 
