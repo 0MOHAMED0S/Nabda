@@ -11,4 +11,8 @@ class Review extends Model
     {
         return $query->where('is_approved', true)->orderBy('created_at', 'desc');
     }
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

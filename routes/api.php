@@ -28,6 +28,8 @@ use App\Http\Controllers\Api\Zakat\ZakatController;
 use App\Http\Controllers\Api\Foundation\OpportunityApplicationController;
 use App\Http\Controllers\Api\Foundation\OpportunityReportEvaluationController;
 use App\Http\Controllers\Api\Foundation\FoundationDashboardController;
+use App\Http\Controllers\Api\Foundation\FoundationMessageController;
+use App\Http\Controllers\Api\Public\ContactFoundationController;
 use App\Http\Controllers\Api\Public\FoundationRatingController;
 use App\Http\Controllers\Api\Public\PublicCaseController;
 
@@ -97,6 +99,10 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // 🎯 جلب خدمات/حملات المؤسسة (التبويب الثاني في بروفايل المؤسسة)
 Route::get('/foundations/{id}/services', [FoundationController::class, 'getFoundationServices']);
+// 🎯 جلب جميع الحالات التابعة لخدمة معينة داخل مؤسسة محددة
+Route::get('/foundations/{foundationId}/services/{serviceId}/cases', [FoundationController::class, 'getFoundationServiceCases']);
+    Route::post('/foundations/{id}/send', [ContactFoundationController::class, 'store']);
+
 // 🎯 جلب معلومات الاتصال والفروع الخاصة بمؤسسة (التبويب الأخير)
 Route::get('/foundations/{id}/contact', [FoundationController::class, 'getContactDetails']);
 Route::prefix('foundation')->group(function () {
@@ -157,7 +163,11 @@ Route::prefix('foundation')->group(function () {
         Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
         Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
 
-
+Route::get('/messages', [FoundationMessageController::class, 'index']);
+Route::get('/messages/{id}', [FoundationMessageController::class, 'show']); // لفتح المودال
+    Route::post('/messages/{id}/reply', [FoundationMessageController::class, 'reply']);
+    Route::patch('/messages/{id}/toggle-read', [FoundationMessageController::class, 'toggleRead']);
+    Route::delete('/messages/{id}', [FoundationMessageController::class, 'destroy']);
         // 🎯 لوحة التحكم الرئيسية للمؤسسة
         Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
     });

@@ -576,4 +576,103 @@ public function getCaseDetails($caseId): JsonResponse
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+
+    /**
+     * API: جلب جميع الحالات المرتبطة بخدمة معينة داخل مؤسسة محددة
+     */
+    public function getFoundationServiceCases(Request $request, $foundationId, $serviceId): JsonResponse
+    {
+        try {
+            // 1. التأكد من وجود المؤسسة واعتمادها
+            $foundation = Foundation::where('status', 'active')->where('approval_status', 'approved')->find($foundationId);
+
+            if (!$foundation) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'المؤسسة غير موجودة أو غير معتمدة حالياً.',
+                    'data'    => [] // إرجاع مصفوفة فارغة لتجنب أخطاء الواجهة
+                ], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // 2. جلب الحالات المطابقة لشرطي المؤسسة والخدمة معاً
+            $cases = FoundationCase::with(['foundation:id,name,logo', 'service.category'])
+                ->where('foundation_id', $foundationId)
+                ->where('service_id', $serviceId) // 🎯 فلترة إضافية برقم الخدمة
+                ->where('status', 'active')
+                ->withSum(['donations as collected_amount' => function ($query) {
+                    $query->where('status', 'completed');
+                }], 'amount')
+                ->orderBy('priority', 'asc') // الحالات العاجلة أولاً
+                ->orderBy('created_at', 'desc')
+                ->get(); // بدون Pagination (يمكنك استخدام paginate إن كانت الحالات كثيرة جداً)
+
+            // 3. تهيئة البيانات وتنسيقها للواجهة (Frontend)
+            $cases->transform(function ($case) {
+                $collected  = $case->collected_amount ?? 0;
+                $target     = $case->target_amount;
+
+                // حساب النسبة المئوية
+                $percentage = ($case->goal_type === 'financial' && $target > 0)
+                    ? min(100, round(($collected / $target) * 100))
+                    : 0;
+
+                // استخراج رابط الصورة الكامل بأمان
+                $firstImage = (is_array($case->images) && count($case->images) > 0) ? $case->images[0] : null;
+                $imageUrl = !empty($firstImage) && !\Illuminate\Support\Str::startsWith($firstImage, ['http://', 'https://'])
+                    ? asset('storage/' . $firstImage)
+                    : $firstImage;
+
+                $logoUrl = ($case->foundation && $case->foundation->logo) && !\Illuminate\Support\Str::startsWith($case->foundation->logo, ['http://', 'https://'])
+                    ? asset('storage/' . $case->foundation->logo)
+                    : ($case->foundation->logo ?? null);
+
+                // تحديد ما إذا كانت الحالة عاجلة
+                $isUrgent = in_array(strtolower($case->priority), ['urgent', 'عاجل', 'high', 'عالية']);
+
+                // استخراج بيانات الخدمة والتصنيف بأمان
+                $serviceCategory = ($case->service && $case->service->category) ? $case->service->category->name : 'غير مصنف';
+                $serviceTitle    = $case->service ? $case->service->title : 'خدمة عامة';
+
+                return [
+                    'id'                    => $case->id,
+                    'foundation_id'         => $case->foundation_id,
+                    'service_id'            => $case->service_id,
+                    'title'                 => $case->title,
+                    'short_description'     => \Illuminate\Support\Str::limit($case->main_description, 70, '...'),
+
+                    'category'              => $serviceCategory,
+                    'service_name'          => $serviceTitle,
+
+                    // شارات وتنسيقات جاهزة للطباعة
+                    'is_urgent'             => $isUrgent,
+                    'urgency_badge'         => $isUrgent ? 'عاجلة' : 'غير عاجلة',
+                    'currency'              => 'جنيه',
+
+                    // الأرقام لشرائط التقدم
+                    'target_amount'         => $target,
+                    'collected_amount'      => $collected,
+                    'completion_percentage' => $percentage,
+
+                    // الصور والمؤسسة
+                    'image_url'             => $imageUrl,
+                    'foundation_name'       => $case->foundation->name ?? '',
+                    'foundation_logo_url'   => $logoUrl,
+                ];
+            });
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب حالات الخدمة التابعة للمؤسسة بنجاح.',
+                'data'    => $cases
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Get Foundation Service Cases Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء جلب الحالات.',
+                'data'    => []
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

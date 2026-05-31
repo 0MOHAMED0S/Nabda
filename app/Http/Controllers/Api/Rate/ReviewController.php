@@ -15,33 +15,48 @@ class ReviewController extends Controller
      * API: جلب جميع التقييمات المعتمدة لعرضها في الموقع
      * (Public Endpoint)
      */
-    public function index()
+public function index()
     {
         try {
-            // 1. تحسين الأداء: جلب الحقول المطلوبة فقط للواجهة الأمامية
-            $reviews = Review::select('id', 'name', 'rating', 'message', 'created_at')
+            // 1. جلب الحقول الأساسية مع علاقة المستخدم (إذا كان موجوداً) لجلب الصورة
+            $reviews = Review::with('user:id,avatar') // نفترض أن صورة المستخدم موجودة في حقل avatar
+                             ->select('id', 'user_id', 'name', 'rating', 'message', 'created_at')
                              ->where('is_approved', true)
                              ->orderBy('created_at', 'desc')
                              ->get();
 
-            // 2. تطبيق معايير RESTful: الاستجابة بـ 200 مع مصفوفة فارغة
             if ($reviews->isEmpty()) {
                 return response()->json([
                     'status'  => true,
                     'message' => 'لا توجد تقييمات معتمدة حتى الآن.',
                     'data'    => []
-                ], 200);
+                ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 3. تنسيق التاريخ ليظهر بشكل احترافي في الواجهة (مثال: منذ يومين، أو تاريخ عادي)
+            // 2. تنسيق البيانات
             $data = $reviews->map(function ($review) {
+                // معالجة صورة المستخدم
+                $userImage = null;
+                if ($review->user && $review->user->avatar) {
+                    // إذا كان مسار الصورة يبدأ بـ http (رابط خارجي) نأخذه كما هو، وإلا نضيف مسار السيرفر
+                    $userImage = str_starts_with($review->user->avatar, 'http')
+                        ? $review->user->avatar
+                        : asset('storage/' . $review->user->avatar);
+                }
+
                 return [
                     'id'      => $review->id,
                     'name'    => $review->name,
                     'rating'  => $review->rating,
                     'message' => $review->message,
-                    // diffForHumans تعطي شكل جميل مثل "منذ 3 أيام" بدلاً من التاريخ الجاف
-                    'date'    => $review->created_at ? $review->created_at->diffForHumans() : null,
+
+                    // 🎯 جلب صورة المستخدم (تكون null إذا لم يكن مسجلاً أو لا يملك صورة)
+                    'image'   => $userImage,
+
+                    // 🎯 تحويل التاريخ للغة العربية
+                    'date'    => $review->created_at
+                                    ? $review->created_at->locale('ar')->diffForHumans()
+                                    : null,
                 ];
             });
 
@@ -49,17 +64,16 @@ class ReviewController extends Controller
                 'status'  => true,
                 'message' => 'تم جلب التقييمات بنجاح.',
                 'data'    => $data
-            ], 200);
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            // تسجيل الخطأ أمنياً
-            Log::error('API Reviews Index Error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API Reviews Index Error: ' . $e->getMessage());
 
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني في الخادم أثناء جلب التقييمات.',
-                'data'    => [] // حماية للـ Frontend
-            ], 500);
+                'data'    => []
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
