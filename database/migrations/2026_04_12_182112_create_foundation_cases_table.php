@@ -24,7 +24,7 @@ return new class extends Migration
 
             // 2. المعلومات المالية
             $table->date('end_date');
-            $table->enum('goal_type', ['financial', 'in-kind'])->default('financial');
+            $table->enum('goal_type', ['financial', 'in-kind', 'both'])->default('financial');
             $table->decimal('target_amount', 15, 2)->nullable();
 
             // 3. المرفقات (JSON لدعم التعدد)

@@ -3,14 +3,11 @@
 namespace App\Http\Controllers\Api\Foundation;
 
 use App\Http\Controllers\Controller;
-use App\Models\FoundationCase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Exception;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Str;
 
 class FoundationCaseController extends Controller
 {
@@ -156,15 +153,11 @@ class FoundationCaseController extends Controller
         }
     }
 
-    /** 2. إضافة حالة جديدة */
-    public function store(Request $request)
+public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'title'                  => 'required|string|max:255',
-
-            // 🎯 تم التصحيح: استبدال campaign_type بـ service_id والتحقق من وجوده في جدول الخدمات
             'service_id'             => 'required|exists:services,id',
-
             'main_description'       => 'required|string',
             'additional_description' => 'nullable|string',
             'beneficiary_name'       => 'required|string|max:255',
@@ -172,8 +165,13 @@ class FoundationCaseController extends Controller
             'beneficiary_address'    => 'required|string|max:500',
             'priority'               => 'required|in:urgent,normal',
             'end_date'               => 'required|date|after:today',
-            'goal_type'              => 'required|in:financial,in-kind',
-            'target_amount'          => 'required_if:goal_type,financial|prohibited_if:goal_type,in-kind|numeric|min:1',
+
+            // 🎯 تم التصحيح: إضافة 'both' لقائمة الخيارات المتاحة
+            'goal_type'              => 'required|in:financial,in-kind,both',
+
+            // 🎯 تم التصحيح: جعل المبلغ مطلوباً في حالة financial أو both
+            'target_amount'          => 'required_if:goal_type,financial,both|prohibited_if:goal_type,in-kind|numeric|min:1',
+
             'images'                 => 'nullable|array',
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'nullable|array',
@@ -182,14 +180,21 @@ class FoundationCaseController extends Controller
         ], $this->validationMessages());
 
         if ($validator->fails()) {
-            return response()->json(['status' => false, 'message' => 'تعذر الحفظ لوجود أخطاء في البيانات.', 'errors' => $validator->errors()], 422, [], JSON_UNESCAPED_UNICODE);
+            return response()->json([
+                'status'  => false,
+                'message' => 'تعذر الحفظ لوجود أخطاء في البيانات.',
+                'errors'  => $validator->errors()
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         try {
-            // 🎯 تم التصحيح: إضافة service_id لمصفوفة البيانات التي سيتم حفظها
+            // 🎯 استخراج البيانات المطلوبة
             $data = $request->only(['title', 'service_id', 'main_description', 'additional_description', 'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority', 'end_date', 'goal_type', 'target_amount']);
 
-            if ($data['goal_type'] === 'in-kind') $data['target_amount'] = null;
+            // تصفير المبلغ فقط إذا كان الهدف عيني بحت
+            if ($data['goal_type'] === 'in-kind') {
+                $data['target_amount'] = null;
+            }
 
             if ($request->hasFile('images')) {
                 $paths = [];
@@ -210,8 +215,7 @@ class FoundationCaseController extends Controller
             // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
             $caseData = $case->toArray();
 
-            // 🎯 الحفاظ على توافق الفرونت إند في الـ Production:
-            // نجلب اسم الخدمة المرتبطة ونضعه في حقل "campaign_type" حتى لا ينهار الفرونت إند الذي يتوقع هذا الحقل
+            // الحفاظ على توافق الفرونت إند في الـ Production
             $caseData['campaign_type'] = $case->service ? $case->service->title : 'خدمة عامة';
             unset($caseData['service']); // تنظيف لعدم تكرار البيانات
 
@@ -227,10 +231,18 @@ class FoundationCaseController extends Controller
                 $caseData['video'] = asset('storage/' . $caseData['video']);
             }
 
-            return response()->json(['status' => true, 'message' => 'تم إضافة الحالة بنجاح.', 'data' => $caseData], 201, [], JSON_UNESCAPED_UNICODE);
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم إضافة الحالة بنجاح.',
+                'data'    => $caseData
+            ], 201, [], JSON_UNESCAPED_UNICODE);
+
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Foundation Case Store Error: " . $e->getMessage());
-            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء حفظ الحالة.'], 500, [], JSON_UNESCAPED_UNICODE);
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء حفظ الحالة.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -319,7 +331,7 @@ class FoundationCaseController extends Controller
     }
 
     /** 4. تحديث حالة (المُحسّنة والمحمية) */
-    public function update(Request $request, $id)
+public function update(Request $request, $id)
     {
         $case = $request->user()->cases()->find($id);
         if (!$case) return response()->json(['status' => false, 'message' => 'الحالة غير موجودة أو تم حذفها.'], 404, [], JSON_UNESCAPED_UNICODE);
@@ -330,7 +342,10 @@ class FoundationCaseController extends Controller
         // القواعد الأساسية
         $rules = [
             'title'                  => 'sometimes|required|string|max:255',
-            'campaign_type'          => 'sometimes|required|string|max:255',
+
+            // 🎯 تم التصحيح: استخدام service_id بدلاً من campaign_type
+            'service_id'             => 'sometimes|required|exists:services,id',
+
             'main_description'       => 'sometimes|required|string',
             'additional_description' => 'sometimes|nullable|string',
             'beneficiary_name'       => 'sometimes|required|string|max:255',
@@ -338,9 +353,11 @@ class FoundationCaseController extends Controller
             'beneficiary_address'    => 'sometimes|required|string|max:500',
             'priority'               => 'sometimes|required|in:urgent,normal',
             'end_date'               => 'sometimes|required|date',
-            'goal_type'              => 'sometimes|required|in:financial,in-kind',
 
-            // 🛡️ تم إصلاح الخطأ: إضافة التحقق من محتوى المصفوفات
+            // 🎯 تم التعديل: السماح بخيار both
+            'goal_type'              => 'sometimes|required|in:financial,in-kind,both',
+
+            // 🛡️ التحقق من محتوى المصفوفات للصور والملفات
             'images'                 => 'sometimes|nullable|array',
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'sometimes|nullable|array',
@@ -348,17 +365,17 @@ class FoundationCaseController extends Controller
             'video'                  => 'sometimes|nullable|file|mimes:mp4,avi,mov,webm|max:51200',
         ];
 
-        // 🎯 🛡️ القواعد الديناميكية لـ target_amount (إصلاح الثغرة المنطقية)
-        if ($currentGoalType === 'financial') {
+        // 🎯 🛡️ القواعد الديناميكية لـ target_amount بناءً على نوع الهدف (مالي أو كلاهما)
+        if (in_array($currentGoalType, ['financial', 'both'])) {
             if ($request->has('goal_type')) {
-                // إذا أرسل المستخدم تعديلاً صريحاً على "نوع الهدف" ليصبح مالي، فهو مجبر على تمرير المبلغ
+                // إذا أرسل المستخدم تعديلاً صريحاً على "نوع الهدف"، فهو مجبر على تمرير المبلغ
                 $rules['target_amount'] = 'required|numeric|min:1';
             } else {
-                // إذا كان الهدف مالي مسبقاً، وهو يُعدل شيئاً آخر (كالاسم)، فلا نجبره على تمرير المبلغ مجدداً، ولكن إن مرره يجب أن يكون صالحاً
+                // إذا كان الهدف مالي/كلاهما مسبقاً وهو يُعدل شيئاً آخر (كالاسم)، فلا نجبره على تمرير المبلغ، ولكن إن مرره يجب أن يكون صالحاً
                 $rules['target_amount'] = 'sometimes|required|numeric|min:1';
             }
         } else {
-            // إذا كان الهدف النهائي "عيني"، نمنع تماماً تمرير أي مبلغ
+            // إذا كان الهدف النهائي "عيني" (in-kind)، نمنع تماماً تمرير أي مبلغ
             $rules['target_amount'] = 'prohibited';
         }
 
@@ -369,9 +386,10 @@ class FoundationCaseController extends Controller
         }
 
         try {
+            // 🎯 تم التعديل: جلب service_id بدلاً من campaign_type
             $data = $request->only([
                 'title',
-                'campaign_type',
+                'service_id',
                 'main_description',
                 'additional_description',
                 'beneficiary_name',
@@ -384,7 +402,7 @@ class FoundationCaseController extends Controller
                 'status'
             ]);
 
-            // 🛡️ تنظيف البيانات: التأكد من تصفير المبلغ في حال كان الهدف النهائي عيني
+            // 🛡️ تنظيف البيانات: التأكد من تصفير المبلغ في حال كان الهدف النهائي عيني فقط
             $finalGoalType = $data['goal_type'] ?? $case->goal_type;
             if ($finalGoalType === 'in-kind') {
                 $data['target_amount'] = null;
@@ -405,11 +423,20 @@ class FoundationCaseController extends Controller
                 $data['video'] = $request->file('video')->store('foundations/cases/videos', 'public');
             }
 
-            if (!empty($data)) $case->update($data);
+            if (!empty($data)) {
+                $case->update($data);
+            }
 
-            // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
+            // 🎯 تجهيز البيانات للإرجاع وتوافقها مع الفرونت إند
+            // تحميل العلاقة مع الخدمة لجلب اسمها
+            $case->load('service');
             $caseData = $case->toArray();
 
+            // تعويض حقل campaign_type باسم الخدمة للفرونت إند
+            $caseData['campaign_type'] = $case->service ? $case->service->title : 'خدمة عامة';
+            unset($caseData['service']); // تنظيف
+
+            // تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
             if (isset($caseData['images']) && is_array($caseData['images'])) {
                 $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
             }
@@ -423,8 +450,8 @@ class FoundationCaseController extends Controller
             }
 
             return response()->json(['status' => true, 'message' => 'تم تحديث بيانات الحالة بنجاح.', 'data' => $caseData], 200, [], JSON_UNESCAPED_UNICODE);
-        } catch (Exception $e) {
-            Log::error("API Foundation Case Update Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Case Update Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء التحديث.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }

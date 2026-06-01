@@ -70,7 +70,7 @@ class OpportunityApplicationController extends Controller
         }
     }
 
-    /**
+/**
      * API: قبول طلب متطوع
      */
     public function accept(Request $request, $opportunityId, $volunteerId): JsonResponse
@@ -104,6 +104,15 @@ class OpportunityApplicationController extends Controller
             // 🎯 تحديث الحالة إلى "مقبول"
             $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'accepted']);
 
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمتطوع بقبوله في الفرصة
+            if ($application) {
+                $application->notify(new \App\Notifications\GeneralNotification(
+                    'تم قبول طلب التطوع 🎉',
+                    "تهانينا! تم قبول طلبك للانضمام إلى الفرصة التطوعية: '{$opportunity->title}'.",
+                    'success'
+                ));
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم قبول المتطوع بنجاح وإضافته لقائمة المسجلين.'
@@ -115,7 +124,7 @@ class OpportunityApplicationController extends Controller
         }
     }
 
-    /**
+/**
      * API: رفض طلب متطوع
      */
     public function reject(Request $request, $opportunityId, $volunteerId): JsonResponse
@@ -135,6 +144,15 @@ class OpportunityApplicationController extends Controller
 
             // 🎯 تحديث الحالة إلى "مرفوض"
             $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'rejected']);
+
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمتطوع بالاعتذار عن قبوله
+            if ($application) {
+                $application->notify(new \App\Notifications\GeneralNotification(
+                    'حالة طلب التطوع 📬',
+                    "نعتذر منك، لم يتم قبول طلبك للانضمام إلى الفرصة التطوعية: '{$opportunity->title}'. نتمنى لك التوفيق في فرص تطوعية أخرى.",
+                    'info'
+                ));
+            }
 
             return response()->json([
                 'status'  => true,

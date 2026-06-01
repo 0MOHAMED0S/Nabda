@@ -231,3 +231,13 @@ Route::prefix('volunteer')->group(function () {
         Route::get('/dashboard', [VolunteerDashboardController::class, 'index']);
     });
 });
+
+
+use App\Http\Controllers\Api\NotificationController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+});

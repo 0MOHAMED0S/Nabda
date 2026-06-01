@@ -113,7 +113,7 @@ class ExploreOpportunityController extends Controller
     /**
      * API: التقديم على فرصة تطوعية (مبادرة شخصية)
      */
-    public function apply(Request $request, $id): JsonResponse
+public function apply(Request $request, $id): JsonResponse
     {
         try {
             $volunteerId = $request->user()->id;
@@ -133,6 +133,16 @@ class ExploreOpportunityController extends Controller
             // 🎯 تم التعديل إلى 'applied' لأن المتطوع بادر بالتقديم
             $opportunity->volunteers()->attach($volunteerId, ['status' => 'applied']);
 
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمؤسسة صاحبة الفرصة
+            if ($opportunity->foundation) {
+                $volunteerName = $request->user()->name ?? 'متطوع';
+                $opportunity->foundation->notify(new \App\Notifications\GeneralNotification(
+                    'طلب تقديم جديد على فرصة تطوعية 🙋‍♂️',
+                    "قام المتطوع {$volunteerName} بتقديم طلب للانضمام إلى الفرصة: '{$opportunity->title}'. يرجى مراجعة الطلب.",
+                    'info'
+                ));
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم إرسال طلب التقديم بنجاح. أنت الآن في انتظار موافقة المؤسسة.'
@@ -147,7 +157,7 @@ class ExploreOpportunityController extends Controller
     /**
      * 🎯 جديد API: قبول دعوة التطوع (عندما تدعو المؤسسة المتطوع)
      */
-    public function acceptInvitation(Request $request, $id): JsonResponse
+public function acceptInvitation(Request $request, $id): JsonResponse
     {
         try {
             $volunteerId = $request->user()->id;
@@ -163,6 +173,16 @@ class ExploreOpportunityController extends Controller
 
             $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'accepted']);
 
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمؤسسة بقبول المتطوع للدعوة
+            if ($opportunity->foundation) {
+                $volunteerName = $request->user()->name ?? 'متطوع';
+                $opportunity->foundation->notify(new \App\Notifications\GeneralNotification(
+                    'قبول دعوة تطوع ✅',
+                    "يسعدنا إخبارك أن المتطوع {$volunteerName} قد وافق على دعوتك وانضم إلى الفرصة: '{$opportunity->title}'.",
+                    'success'
+                ));
+            }
+
             return response()->json(['status' => true, 'message' => 'تم قبول الدعوة بنجاح! يسعدنا انضمامك.'], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
@@ -174,7 +194,7 @@ class ExploreOpportunityController extends Controller
     /**
      * 🎯 جديد API: رفض دعوة التطوع
      */
-    public function rejectInvitation(Request $request, $id): JsonResponse
+public function rejectInvitation(Request $request, $id): JsonResponse
     {
         try {
             $volunteerId = $request->user()->id;
@@ -190,6 +210,16 @@ class ExploreOpportunityController extends Controller
 
             $opportunity->volunteers()->updateExistingPivot($volunteerId, ['status' => 'rejected']);
 
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمؤسسة باعتذار المتطوع عن الدعوة
+            if ($opportunity->foundation) {
+                $volunteerName = $request->user()->name ?? 'متطوع';
+                $opportunity->foundation->notify(new \App\Notifications\GeneralNotification(
+                    'اعتذار عن دعوة تطوع ❌',
+                    "نأسف لإخبارك أن المتطوع {$volunteerName} قد اعتذر عن قبول الدعوة للانضمام إلى الفرصة: '{$opportunity->title}'.",
+                    'warning'
+                ));
+            }
+
             return response()->json(['status' => true, 'message' => 'تم رفض الدعوة.'], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
@@ -201,7 +231,7 @@ class ExploreOpportunityController extends Controller
     /**
      * API: إلغاء التقديم (الانسحاب من الفرصة)
      */
-    public function cancel(Request $request, $id): JsonResponse
+public function cancel(Request $request, $id): JsonResponse
     {
         try {
             $volunteerId = $request->user()->id;
@@ -214,6 +244,16 @@ class ExploreOpportunityController extends Controller
             if (!$application) return response()->json(['status' => false, 'message' => 'أنت غير مسجل في هذه الفرصة.'], 400, [], JSON_UNESCAPED_UNICODE);
 
             $opportunity->volunteers()->detach($volunteerId);
+
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمؤسسة بانسحاب المتطوع
+            if ($opportunity->foundation) {
+                $volunteerName = $request->user()->name ?? 'متطوع';
+                $opportunity->foundation->notify(new \App\Notifications\GeneralNotification(
+                    'انسحاب متطوع 🛑',
+                    "قام المتطوع {$volunteerName} بإلغاء تقديمه والانسحاب من الفرصة: '{$opportunity->title}'.",
+                    'warning'
+                ));
+            }
 
             return response()->json(['status' => true, 'message' => 'تم إلغاء التقديم والانسحاب بنجاح.'], 200, [], JSON_UNESCAPED_UNICODE);
 
@@ -273,7 +313,7 @@ class ExploreOpportunityController extends Controller
     /**
      * API: رفع تقرير إتمام مهمة (ساعات العمل والصور)
      */
-    public function submitReport(Request $request, $id): JsonResponse
+public function submitReport(Request $request, $id): JsonResponse
     {
         try {
             $volunteerId = $request->user()->id;
@@ -318,6 +358,16 @@ class ExploreOpportunityController extends Controller
             $reportData = $report->toArray();
             if (!empty($reportData['images'])) {
                 $reportData['images'] = array_map(fn($img) => asset('storage/' . $img), $reportData['images']);
+            }
+
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمؤسسة باستلام تقرير جديد من المتطوع
+            if ($opportunity->foundation) {
+                $volunteerName = $request->user()->name ?? 'متطوع';
+                $opportunity->foundation->notify(new \App\Notifications\GeneralNotification(
+                    'تقرير تطوع جديد 📝',
+                    "قام المتطوع {$volunteerName} برفع تقرير جديد لفرصة التطوع: '{$opportunity->title}'. يرجى مراجعته.",
+                    'success'
+                ));
             }
 
             return response()->json([

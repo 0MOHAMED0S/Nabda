@@ -13,9 +13,6 @@ use Exception;
 
 class PublicCaseController extends Controller
 {
-    /**
-     * API 1: جلب جميع الحالات النشطة (لصفحة الحالات الرئيسية - الكروت) - بدون Pagination
-     */
     public function index(Request $request): JsonResponse
     {
         try {
@@ -88,7 +85,6 @@ class PublicCaseController extends Controller
                 'message' => 'تم جلب الحالات بنجاح.',
                 'data'    => $cases
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Get All Public Cases Error: " . $e->getMessage());
             return response()->json([
@@ -97,11 +93,7 @@ class PublicCaseController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-
-    /**
-     * API 2: عرض تفاصيل الحالة بالكامل (للشاشة الفردية - الصورة الثانية)
-     */
-public function show($id): JsonResponse
+    public function show($id): JsonResponse
     {
         try {
             // 1. استعلام شامل يجلب الحالة بكل تفاصيلها (المؤسسة، التحديثات، الخدمة، التبرعات)
@@ -232,7 +224,6 @@ public function show($id): JsonResponse
                 'message' => 'تم جلب تفاصيل الحالة بنجاح.',
                 'data'    => $data
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Get Public Case Details Error (ID: {$id}): " . $e->getMessage());
             return response()->json([

@@ -26,10 +26,10 @@ class ContactFoundationController extends Controller
 
         try {
             // 1. جلب بيانات المؤسسة للتحقق من وجودها وللحصول على بريدها الإلكتروني
-            $foundation = Foundation::findOrFail($foundationId);
+            $foundation = \App\Models\Foundation::findOrFail($foundationId);
 
             // 2. إنشاء الرسالة وحفظها في قاعدة البيانات
-            $newMessage = FoundationMessage::create([
+            $newMessage = \App\Models\FoundationMessage::create([
                 'foundation_id' => $foundationId,
                 'user_id'       => auth('sanctum')->check() ? auth('sanctum')->id() : null,
                 'name'          => $request->name,
@@ -40,14 +40,22 @@ class ContactFoundationController extends Controller
 
             // 3. 🎯 إرسال الإشعار للمؤسسة عبر البريد في الخلفية (Queue)
             if (!empty($foundation->email)) {
-                Mail::to($foundation->email)->send(new NewFoundationMessageAlert($newMessage));
+                \Illuminate\Support\Facades\Mail::to($foundation->email)->send(new \App\Mail\NewFoundationMessageAlert($newMessage));
+            }
+
+            // 🔔 4. إرسال إشعار داخل النظام (Database Notification) للمؤسسة
+            if ($foundation) {
+                $foundation->notify(new \App\Notifications\GeneralNotification(
+                    'رسالة تواصل جديدة ✉️',
+                    "تلقيت رسالة تواصل جديدة من {$request->name} بعنوان: '{$request->subject}'.",
+                    'info'
+                ));
             }
 
             return response()->json([
                 'status'  => true,
                 'message' => 'تم إرسال رسالتك للمؤسسة بنجاح.'
             ], 201, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Send Foundation Message Error: " . $e->getMessage());
             return response()->json([

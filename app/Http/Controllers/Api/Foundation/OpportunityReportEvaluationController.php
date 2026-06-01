@@ -68,7 +68,7 @@ class OpportunityReportEvaluationController extends Controller
         }
     }
 
-    /**
+/**
      * API: تقييم التقرير (الموافقة/الرفض، تعديل الساعات، التقييم، وإرسال رسالة)
      */
     public function evaluate(Request $request, $reportId): JsonResponse
@@ -109,6 +109,21 @@ class OpportunityReportEvaluationController extends Controller
             // 💡 خطوة إضافية ذكية: إذا تمت الموافقة على التقرير، نجعل حالة المتطوع "حضر" (attended)
             if ($request->status === 'approved') {
                 $report->opportunity->volunteers()->updateExistingPivot($report->volunteer_id, ['status' => 'attended']);
+            }
+
+            // 🔔 إضافة الإشعار: إرسال تنبيه للمتطوع بنتيجة تقييم تقريره
+            // (نبحث في موديل المستخدمين أو المتطوعين حسب هيكلة نظامك)
+            $volunteerToNotify = \App\Models\User::find($report->volunteer_id) ?? \App\Models\Volunteer::find($report->volunteer_id);
+            if ($volunteerToNotify) {
+                $statusAr = $request->status === 'approved' ? 'قبول' : 'رفض';
+                $icon = $request->status === 'approved' ? 'success' : 'warning';
+                $emoji = $request->status === 'approved' ? '✅' : '❌';
+
+                $volunteerToNotify->notify(new \App\Notifications\GeneralNotification(
+                    "تقييم تقرير التطوع {$emoji}",
+                    "تم {$statusAr} تقريرك الخاص بفرصة التطوع: '{$report->opportunity->title}'.",
+                    $icon
+                ));
             }
 
             // تحويل الصور لروابط كاملة قبل إرجاع الرد

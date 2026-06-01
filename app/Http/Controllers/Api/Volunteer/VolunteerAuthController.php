@@ -19,7 +19,7 @@ class VolunteerAuthController extends Controller
     /**
      * API: تسجيل حساب متطوع جديد (يذهب لقائمة الانتظار Pending)
      */
-    public function register(Request $request): JsonResponse
+public function register(Request $request): JsonResponse
     {
         // 1. Initial Strict Validation (يطابق تصميم الشاشات بالضبط)
         $validator = Validator::make($request->all(), [
@@ -122,6 +122,31 @@ class VolunteerAuthController extends Controller
             ]);
 
             DB::commit();
+
+            // 🔔 5. إرسال الإشعارات
+            // أ) إشعار للمؤسسة (إذا كان التطوع تابعاً لها)
+            if ($volunteer->foundation_id) {
+                $foundationToNotify = \App\Models\Foundation::find($volunteer->foundation_id);
+                if ($foundationToNotify) {
+                    $foundationToNotify->notify(new \App\Notifications\GeneralNotification(
+                        'طلب تطوع جديد 🤝',
+                        "قام المتطوع {$volunteer->name} بطلب الانضمام لمؤسستكم، وهو الآن قيد مراجعة الإدارة.",
+                        'info'
+                    ));
+                }
+            }
+
+            // ب) إشعار للإدمن (لمراجعة البطاقة وتفعيل الحساب)
+            if (class_exists(\App\Models\Admin::class)) {
+                $admins = \App\Models\Admin::all();
+                foreach ($admins as $admin) {
+                    $admin->notify(new \App\Notifications\GeneralNotification(
+                        'مراجعة متطوع جديد ⏳',
+                        "تم تسجيل متطوع جديد ({$volunteer->name}) بانتظار مراجعة الهوية الوطنية والتفعيل.",
+                        'warning'
+                    ));
+                }
+            }
 
             return response()->json([
                 'status'  => true,

@@ -521,7 +521,7 @@ public function getCaseDetails($caseId): JsonResponse
         }
     }
 
-    public function getContactDetails(Request $request, $id): JsonResponse
+public function getContactDetails(Request $request, $id): JsonResponse
     {
         try {
             // 1. جلب المؤسسة مع فروعها
@@ -538,16 +538,35 @@ public function getCaseDetails($caseId): JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. تهيئة بيانات الفروع (بما في ذلك الإحداثيات للخريطة)
+            // 2. تهيئة بيانات الفروع (معالجة حقل coordinates)
             $branches = $foundation->branches->map(function ($branch) {
+
+                // 🎯 فصل حقل الإحداثيات إلى خط عرض وطول
+                $lat = null;
+                $lng = null;
+
+                if (!empty($branch->coordinates)) {
+                    // افتراض أن الإحداثيات محفوظة مفصولة بفاصلة مثل: "30.0444,31.2357"
+                    $coords = explode(',', $branch->coordinates);
+                    if (count($coords) >= 2) {
+                        $lat = trim($coords[0]);
+                        $lng = trim($coords[1]);
+                    }
+                }
+
                 return [
                     'id'        => $branch->id,
                     'name'      => $branch->name, // مثال: فرع القاهرة
                     'address'   => $branch->address,
                     'phone'     => $branch->phone,
-                    // إحداثيات الخريطة (Leaflet / OpenStreetMap كما في الصورة)
-                    'latitude'  => $branch->latitude,
-                    'longitude' => $branch->longitude,
+                    'email'     => $branch->email, // 🎯 أضفنا الإيميل لأنه موجود في الموديل لديك
+
+                    // إحداثيات الخريطة (Leaflet / OpenStreetMap)
+                    'latitude'  => $lat,
+                    'longitude' => $lng,
+
+                    // نرسل الحقل الأصلي احتياطياً
+                    'coordinates' => $branch->coordinates
                 ];
             });
 
@@ -556,7 +575,6 @@ public function getCaseDetails($caseId): JsonResponse
                 'contact_info' => [
                     'phone'         => $foundation->phone ?? 'غير متوفر',
                     'email'         => $foundation->email ?? 'غير متوفر',
-                    // إذا كان لديك حقل لساعات العمل في الداتا بيز استخدمه، وإلا ضع قيمة افتراضية
                     'working_hours' => $foundation->working_hours ?? 'الاثنين - السبت: 9:00 ص - 5:00 م',
                 ],
                 'branches' => $branches
@@ -568,15 +586,14 @@ public function getCaseDetails($caseId): JsonResponse
                 'data'    => $data
             ], 200, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            Log::error("API Get Foundation Contact Details Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Get Foundation Contact Details Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب بيانات الاتصال.'
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-
     /**
      * API: جلب جميع الحالات المرتبطة بخدمة معينة داخل مؤسسة محددة
      */

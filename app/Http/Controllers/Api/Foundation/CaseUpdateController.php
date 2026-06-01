@@ -62,7 +62,7 @@ class CaseUpdateController extends Controller
         }
     }
 
-    /**
+/**
      * API: إضافة تحديث جديد لحالة معينة
      */
     public function store(Request $request, $caseId): JsonResponse
@@ -99,6 +99,19 @@ class CaseUpdateController extends Controller
                 'update_date'        => $request->update_date,
                 'description'        => $request->description,
             ]);
+
+            // 🔔 إضافة الإشعار: إرسال تنبيه لجميع المتبرعين (المسجلين) الذين ساهموا في هذه الحالة
+            $donors = \App\Models\User::whereHas('donations', function ($query) use ($case) {
+                $query->where('case_id', $case->id)->where('status', 'completed');
+            })->get();
+
+            foreach ($donors as $donor) {
+                $donor->notify(new \App\Notifications\GeneralNotification(
+                    'تحديث جديد بخصوص الحالة',
+                    "تم إضافة تحديث جديد بخصوص حالة '{$case->title}': {$request->title}.",
+                    'info'
+                ));
+            }
 
             return response()->json([
                 'status'  => true,

@@ -17,11 +17,11 @@ class FoundationRatingController extends Controller
     /**
      * API: إضافة تقييم لمؤسسة (متاح للزوار والمستخدمين المسجلين)
      */
-    public function store(Request $request, $foundationId): JsonResponse
+public function store(Request $request, $foundationId): JsonResponse
     {
         try {
-            // 1. التأكد من وجود المؤسسة (استبدل User بالموديل الصحيح إذا لزم الأمر)
-            $foundation = Foundation::find($foundationId); // بفرض أن المؤسسة مستخدم بنوع foundation
+            // 1. التأكد من وجود المؤسسة
+            $foundation = \App\Models\Foundation::find($foundationId);
 
             if (!$foundation) {
                 return response()->json([
@@ -31,7 +31,7 @@ class FoundationRatingController extends Controller
             }
 
             // 2. التحقق من صحة البيانات بناءً على قيود الواجهة (الصورة)
-            $validator = Validator::make($request->all(), [
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
                 'rating'  => 'required|integer|min:1|max:5',
                 'name'    => 'nullable|string|max:255',
                 'message' => 'nullable|string|max:200', // بحد أقصى 200 حرف كما في التصميم
@@ -49,11 +49,10 @@ class FoundationRatingController extends Controller
             }
 
             // 3. التحقق مما إذا كان المستخدم مسجلاً للدخول أم زائر (Guest)
-            // استخدام auth('sanctum')->id() سيجلب الـ ID إذا كان هناك توكن، وسيعيد null إذا كان زائراً
             $userId = auth('sanctum')->check() ? auth('sanctum')->id() : null;
 
             // 4. حفظ التقييم في قاعدة البيانات
-            $rating = FoundationRating::create([
+            $rating = \App\Models\FoundationRating::create([
                 'foundation_id' => $foundationId,
                 'user_id'       => $userId,
                 'rating'        => $request->rating,
@@ -62,14 +61,26 @@ class FoundationRatingController extends Controller
                 'message'       => $request->message,
             ]);
 
+            // 🔔 5. إرسال إشعار للمؤسسة بالتقييم الجديد
+            if ($foundation) {
+                // رسم نجوم لجمالية الإشعار بناءً على التقييم
+                $stars = str_repeat('⭐', $rating->rating);
+
+                $foundation->notify(new \App\Notifications\GeneralNotification(
+                    'تقييم جديد 🌟',
+                    "تلقيت تقييماً جديداً بـ {$rating->rating} نجوم {$stars} من {$rating->name}.",
+                    'info'
+                ));
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم إرسال تقييمك بنجاح. شكراً لمساهمتك في تحسين جودة الخدمة!',
                 'data'    => $rating
             ], 201, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            Log::error("API Public Foundation Rating Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Public Foundation Rating Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء إرسال التقييم.'

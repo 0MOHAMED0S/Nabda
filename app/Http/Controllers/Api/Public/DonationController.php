@@ -36,29 +36,22 @@ class DonationController extends Controller
             // ... (باقي رسائل الخطأ الخاصة بك كما هي)
         ];
     }
-
-    /**
-     * API: إنشاء طلب تبرع جديد (يولد رابط الدفع للمالي، ويحفظ العيني)
-     */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'foundation_id'    => 'required|integer|exists:foundations,id',
             'case_id'          => [
                 'nullable',
                 'integer',
-                Rule::exists('foundation_cases', 'id')->where(function ($query) use ($request) {
+                \Illuminate\Validation\Rule::exists('foundation_cases', 'id')->where(function ($query) use ($request) {
                     $query->where('foundation_id', $request->foundation_id);
                 }),
             ],
             'donation_type'    => 'required|string|in:financial,in-kind',
-
             'donor_name'       => 'nullable|string|min:2|max:255',
             'donor_phone'      => 'nullable|string|regex:/^([0-9\s\-\+\(\)]*)$/|min:8|max:20',
-            'donor_email'      => 'required_if:donation_type,financial|nullable|email|max:255', // 🎯 مطلوب لـ Paymob
-
+            'donor_email'      => 'required_if:donation_type,financial|nullable|email|max:255',
             'amount'           => 'required_if:donation_type,financial|prohibited_if:donation_type,in-kind|nullable|numeric|min:5|max:1000000',
-
             'item_category'    => 'required_if:donation_type,in-kind|prohibited_if:donation_type,financial|nullable|string|max:255',
             'item_description' => 'required_if:donation_type,in-kind|prohibited_if:donation_type,financial|nullable|string|min:3|max:1000',
             'item_condition'   => 'nullable|string|max:255',
@@ -66,16 +59,15 @@ class DonationController extends Controller
             'donor_address'    => 'required_if:delivery_method,home_pickup|nullable|string|min:5|max:1000',
             'pickup_time'      => 'required_if:delivery_method,home_pickup,collection_point|nullable|date|after:now',
             'donation_image'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
-        ], $this->validationMessages());
+        ]);
 
-        // التحقق من توافق الحالة مع نوع التبرع
         $validator->after(function ($validator) use ($request) {
             if ($request->filled('case_id') && $request->filled('donation_type') && empty($validator->errors()->get('case_id'))) {
-                $case = FoundationCase::find($request->case_id);
+                $case = \App\Models\FoundationCase::find($request->case_id);
                 if ($case && $case->status !== 'active') {
                     $validator->errors()->add('case_id', 'عذراً، هذه الحالة مغلقة أو مكتملة ولا تقبل تبرعات جديدة.');
                 }
-                if ($case && $case->goal_type !== $request->donation_type) {
+                if ($case && $case->goal_type !== 'both' && $case->goal_type !== $request->donation_type) {
                     $goalNameAr = $case->goal_type === 'financial' ? 'مالية' : 'عينية';
                     $validator->errors()->add('donation_type', "عذراً، هذه الحالة تقبل التبرعات الـ ({$goalNameAr}) فقط.");
                 }
@@ -83,17 +75,12 @@ class DonationController extends Controller
         });
 
         if ($validator->fails()) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'تعذر إتمام الطلب لوجود أخطاء في البيانات.',
-                'errors'  => $validator->errors()
-            ], 422);
+            return response()->json(['status' => false, 'message' => 'تعذر إتمام الطلب.', 'errors' => $validator->errors()], 422);
         }
 
         try {
             $data = $request->except('donation_image');
 
-            // 1. معالجة هوية المتبرع
             if (auth('sanctum')->check() && auth('sanctum')->user() instanceof \App\Models\User) {
                 $user = auth('sanctum')->user();
                 $data['user_id']     = $user->id;
@@ -106,49 +93,37 @@ class DonationController extends Controller
                 $data['donor_email'] = $request->donor_email ?? 'dummy@nabdatkhair.com';
             }
 
-            // 2. رفع الصورة العينية
             if ($request->hasFile('donation_image')) {
                 $data['donation_image'] = $request->file('donation_image')->store('donations/images', 'public');
             }
 
-            // 3. ضبط الحالة الافتراضية
             $data['payment_status'] = 'pending';
             $data['status']         = 'pending';
             $data['payment_method'] = $data['donation_type'] === 'financial' ? 'paymob' : null;
 
-            // حفظ التبرع مبدئياً
-            $donation = Donation::create($data);
+            $donation = \App\Models\Donation::create($data);
 
-            // 🎯 4. مسار التبرع المالي (Paymob Integration)
             if ($donation->donation_type === 'financial') {
                 $amountInCents = $donation->amount * 100;
-
-                // أ. الحصول على Auth Token
-                $authResponse = Http::post('https://accept.paymob.com/api/auth/tokens', [
-                    'api_key' => env('PAYMOB_API_KEY')
-                ]);
+                $authResponse = \Illuminate\Support\Facades\Http::post('https://accept.paymob.com/api/auth/tokens', ['api_key' => env('PAYMOB_API_KEY')]);
                 $authToken = $authResponse->json()['token'];
 
-                // ب. تسجيل الطلب
-                $orderResponse = Http::post('https://accept.paymob.com/api/ecommerce/orders', [
+                $orderResponse = \Illuminate\Support\Facades\Http::post('https://accept.paymob.com/api/ecommerce/orders', [
                     'auth_token'      => $authToken,
                     'delivery_needed' => 'false',
-                    'amount_cents'    => $amountInCents,
+                    'amount_cents' => $amountInCents,
                     'currency'        => 'EGP',
                     'merchant_order_id' => $donation->id . '_' . time(),
                 ]);
                 $paymobOrderId = $orderResponse->json()['id'];
-
-                // تحديث رقم الطلب في الداتابيز
                 $donation->update(['paymob_order_id' => $paymobOrderId]);
 
-                // ج. الحصول على مفتاح الدفع
-                $paymentKeyResponse = Http::post('https://accept.paymob.com/api/acceptance/payment_keys', [
-                    'auth_token'     => $authToken,
-                    'amount_cents'   => $amountInCents,
-                    'expiration'     => 3600,
-                    'order_id'       => $paymobOrderId,
-                    'billing_data'   => [
+                $paymentKeyResponse = \Illuminate\Support\Facades\Http::post('https://accept.paymob.com/api/acceptance/payment_keys', [
+                    'auth_token' => $authToken,
+                    'amount_cents' => $amountInCents,
+                    'expiration' => 3600,
+                    'order_id' => $paymobOrderId,
+                    'billing_data' => [
                         "apartment" => "NA",
                         "email" => $donation->donor_email,
                         "floor" => "NA",
@@ -163,7 +138,7 @@ class DonationController extends Controller
                         "last_name" => "NA",
                         "state" => "NA"
                     ],
-                    'currency'       => 'EGP',
+                    'currency' => 'EGP',
                     'integration_id' => env('PAYMOB_INTEGRATION_ID')
                 ]);
 
@@ -171,34 +146,40 @@ class DonationController extends Controller
                 $iframeLink = "https://accept.paymob.com/api/acceptance/iframes/" . env('PAYMOB_IFRAME_ID') . "?payment_token=" . $paymentToken;
 
                 return response()->json([
-                    'status'  => true,
-                    'message' => 'تم إنشاء طلب التبرع. يرجى إكمال عملية الدفع.',
-                    'data'    => [
-                        'donation_id' => $donation->id,
-                        'payment_url' => $iframeLink // الفرونت إند يفتح هذا الرابط للمستخدم
-                    ]
+                    'status' => true,
+                    'message' => 'تم إنشاء طلب التبرع.',
+                    'data' => ['donation_id' => $donation->id, 'payment_url' => $iframeLink]
                 ], 201);
             }
 
-            // 🎯 5. مسار التبرع العيني
-            return response()->json([
-                'status'  => true,
-                'message' => 'تم تسجيل تبرعكم العيني بنجاح. سيتم التواصل معكم قريباً لترتيب الاستلام.',
-                'data'    => $donation
-            ], 201);
-        } catch (Exception $e) {
-            Log::error("API Make Donation Error: " . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'حدث خطأ تقني أثناء معالجة الطلب. يرجى المحاولة لاحقاً.'
-            ], 500);
+            // 🎯 إشعارات التبرع العيني
+            $foundation = \App\Models\Foundation::find($donation->foundation_id);
+            if ($foundation) {
+                $foundation->notify(new \App\Notifications\GeneralNotification(
+                    'تبرع عيني جديد 🎁',
+                    "تم تسجيل تبرع عيني جديد من {$donation->donor_name}، يرجى مراجعة التفاصيل.",
+                    'info'
+                ));
+            }
+
+            if ($donation->user_id) {
+                $user = \App\Models\User::find($donation->user_id);
+                if ($user) {
+                    $user->notify(new \App\Notifications\GeneralNotification(
+                        'تم تسجيل تبرعك',
+                        'شكراً لك! تم تسجيل تبرعك العيني وسنتواصل معك قريباً لترتيب الاستلام.',
+                        'success'
+                    ));
+                }
+            }
+
+            return response()->json(['status' => true, 'message' => 'تم تسجيل تبرعكم العيني بنجاح.', 'data' => $donation], 201);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Make Donation Error: " . $e->getMessage());
+            return response()->json(['status' => false, 'message' => 'حدث خطأ تقني.'], 500);
         }
     }
 
-    /**
-     * API: استقبال رد بيموب وتأكيد الدفع (Webhook)
-     * هنا نقوم بإغلاق الحالة إذا اكتمل المبلغ!
-     */
     public function paymobCallback(Request $request)
     {
         $data = $request->all();
@@ -215,12 +196,12 @@ class DonationController extends Controller
         $calculatedHmac = hash_hmac('sha512', $hmacString, env('PAYMOB_HMAC'));
 
         if ($calculatedHmac !== $request->hmac) {
-            Log::warning('Paymob HMAC Check Failed!');
+            \Illuminate\Support\Facades\Log::warning('Paymob HMAC Check Failed!');
             return response()->json(['message' => 'HMAC validation failed'], 403);
         }
 
         $orderId = $data['order']['id'];
-        $donation = Donation::where('paymob_order_id', $orderId)->first();
+        $donation = \App\Models\Donation::where('paymob_order_id', $orderId)->first();
 
         if ($donation && $donation->status === 'pending') {
             if ($data['success'] === 'true' || $data['success'] === true) {
@@ -231,26 +212,69 @@ class DonationController extends Controller
                     'paymob_transaction_id' => $data['id']
                 ]);
 
+                // 🎯 جلب بيانات الحالة (إذا وجدت) والمؤسسة والمستخدم
+                $case = $donation->case_id ? \App\Models\FoundationCase::find($donation->case_id) : null;
+                $foundation = \App\Models\Foundation::find($donation->foundation_id);
+                $user = $donation->user_id ? \App\Models\User::find($donation->user_id) : null;
+
+                // 🔔 إشعار 1: للمستخدم (نص مطابق للصورة تماماً)
+                if ($user) {
+                    $caseName = $case ? "لحالة '{$case->title}' " : "للمؤسسة ";
+                    $user->notify(new \App\Notifications\GeneralNotification(
+                        'تم استلام تبرعك بنجاح',
+                        "شكراً لك! تبرعك {$caseName}تم بنجاح ووصل إلى المستفيد.",
+                        'success'
+                    ));
+                }
+
+                // 🔔 إشعار 2: للمؤسسة (تأكيد استلام الأموال)
+                if ($foundation) {
+                    $foundation->notify(new \App\Notifications\GeneralNotification(
+                        'تبرع مالي جديد 💰',
+                        "تم استلام تبرع مالي بقيمة {$donation->amount} جنيه من {$donation->donor_name} بنجاح.",
+                        'success'
+                    ));
+                }
+
                 // 🎯 3. التحديث الذكي: إغلاق الحالة إذا اكتمل المبلغ
-                if ($donation->case_id) {
-                    $case = FoundationCase::find($donation->case_id);
-                    if ($case && $case->goal_type === 'financial' && $case->target_amount > 0) {
-                        $totalCollected = $case->donations()->where('status', 'completed')->sum('amount');
-                        if ($totalCollected >= $case->target_amount) {
-                            $case->update(['status' => 'completed']);
+                if ($case && in_array($case->goal_type, ['financial', 'both']) && $case->target_amount > 0) {
+                    $totalCollected = $case->donations()->where('status', 'completed')->sum('amount');
+
+                    if ($totalCollected >= $case->target_amount) {
+                        $case->update(['status' => 'completed']);
+
+                        // 🔔 إشعار 3: للمؤسسة (اكتمال الحالة)
+                        if ($foundation) {
+                            $foundation->notify(new \App\Notifications\GeneralNotification(
+                                'اكتملت الحالة! 🎉',
+                                "تهانينا! تم جمع المبلغ المطلوب بالكامل لحالة '{$case->title}'.",
+                                'success'
+                            ));
                         }
                     }
                 }
             } else {
                 // فشل الدفع
                 $donation->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+
+                // 🔔 إشعار الفشل للمستخدم
+                if ($donation->user_id) {
+                    $user = \App\Models\User::find($donation->user_id);
+                    if ($user) {
+                        $user->notify(new \App\Notifications\GeneralNotification(
+                            'فشل عملية الدفع',
+                            'عذراً، لم نتمكن من إتمام عملية الدفع الخاصة بتبرعك. يرجى المحاولة مرة أخرى.',
+                            'warning'
+                        ));
+                    }
+                }
             }
         }
 
         return response()->json(['message' => 'Processed'], 200);
     }
 
-public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
             $userId = $request->user()->id;
@@ -299,9 +323,9 @@ public function index(Request $request): JsonResponse
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('donor_name', 'like', "%{$search}%")
-                      ->orWhereHas('foundation', function ($fQ) use ($search) {
-                          $fQ->where('name', 'like', "%{$search}%");
-                      });
+                        ->orWhereHas('foundation', function ($fQ) use ($search) {
+                            $fQ->where('name', 'like', "%{$search}%");
+                        });
                 });
             }
 
@@ -340,7 +364,7 @@ public function index(Request $request): JsonResponse
                 $statusAr = match ($donation->status) {
                     'completed' => 'مكتمل',
                     'pending'   => 'قيد المراجعة',
-                    'processing'=> 'جاري', // تظهر في الصورة كـ "جاري"
+                    'processing' => 'جاري', // تظهر في الصورة كـ "جاري"
                     'cancelled' => 'ملغي',
                     default     => 'غير محدد'
                 };
@@ -373,7 +397,6 @@ public function index(Request $request): JsonResponse
                     'donations' => $donations // مصفوفة عادية تحتوي على التبرعات مباشرة
                 ]
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API User Donations Index Error: " . $e->getMessage());
             return response()->json([
