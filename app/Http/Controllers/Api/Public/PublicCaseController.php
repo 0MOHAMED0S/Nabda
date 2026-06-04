@@ -93,7 +93,7 @@ class PublicCaseController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-    public function show($id): JsonResponse
+public function show($id): JsonResponse
     {
         try {
             // 1. استعلام شامل يجلب الحالة بكل تفاصيلها (المؤسسة، التحديثات، الخدمة، التبرعات)
@@ -182,6 +182,7 @@ class PublicCaseController extends Controller
                 'foundation_id'         => $case->foundation_id, // 🎯 تمت إضافة رقم المؤسسة
                 'case_number'           => '#' . $case->id,
                 'title'                 => $case->title,
+                'donation_type'         => $case->goal_type, // 🎯 تمت إضافة نوع التبرع هنا
                 'location'              => $case->beneficiary_address ?? 'غير محدد',
 
                 'category'              => $serviceCategory,
