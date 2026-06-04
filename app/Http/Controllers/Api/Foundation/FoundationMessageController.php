@@ -135,7 +135,7 @@ public function reply(Request $request, $id): JsonResponse
 
             // إرسال الإيميل في الخلفية
             if (!empty($message->email)) {
-                Mail::to($message->email)->queue(new FoundationMessageReply(
+                Mail::to($message->email)->send(new FoundationMessageReply(
                     $request->reply_subject,
                     $request->reply_body,
                     $message->foundation->name ?? 'مؤسسة خيرية'

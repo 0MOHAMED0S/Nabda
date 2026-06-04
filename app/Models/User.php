@@ -19,6 +19,8 @@ class User extends Authenticatable
         'city',              // 🎯 تمت الإضافة
         'charity_interests', // 🎯 تمت الإضافة
         'password',
+        'google_id',
+        'title',             // 🎯 تمت الإضافة
     ];
 
     protected $hidden = [

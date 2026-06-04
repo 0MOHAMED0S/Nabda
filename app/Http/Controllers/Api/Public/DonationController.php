@@ -405,4 +405,114 @@ class DonationController extends Controller
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
+
+    /**
+     * API: جلب تفاصيل تبرع محدد (إيصال التبرع)
+     */
+    public function show(Request $request, $id): JsonResponse
+    {
+        try {
+            $userId = $request->user()->id;
+
+            // 1. جلب التبرع مع العلاقات (المؤسسة والحالة)
+            $donation = Donation::with(['foundation', 'foundationCase'])
+                ->where('id', $id)
+                ->where('user_id', $userId) // التأكد أن التبرع يخص المستخدم الحالي
+                ->first();
+
+            if (!$donation) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'التبرع غير موجود أو لا تملك صلاحية الوصول إليه.'
+                ], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // 2. حساب المبالغ المالية (بناءً على الصورة: يتم إضافة 1% كرسوم خدمة)
+            // إذا كان التبرع عينياً، المبالغ ستكون 0
+            $isFinancial = $donation->donation_type === 'financial';
+            $baseAmount  = $isFinancial ? $donation->amount : 0;
+            $feeAmount   = $isFinancial ? ($baseAmount * 0.01) : 0; // 1% رسوم خدمة افتراضية
+            $totalAmount = $baseAmount + $feeAmount;
+
+            // 3. ترجمة حالة التبرع
+            $statusAr = match ($donation->status) {
+                'completed'  => 'مكتمل',
+                'pending'    => 'قيد المراجعة',
+                'processing' => 'جاري',
+                'cancelled'  => 'ملغي',
+                default      => 'غير محدد'
+            };
+
+            // 4. ترجمة طريقة الدفع / التسليم
+            if ($isFinancial) {
+                $methodAr = match ($donation->payment_method) {
+                    'paymob'        => 'بطاقة ائتمانية',
+                    'bank_transfer' => 'تحويل بنكي',
+                    'cash'          => 'دفع نقدي',
+                    default         => 'بطاقة ائتمانية'
+                };
+            } else {
+                $methodAr = match ($donation->delivery_method) {
+                    'home_pickup'      => 'توصيل للمقر',
+                    'branch_dropoff'   => 'تسليم يدوي',
+                    'collection_point' => 'نقطة تجميع',
+                    default            => 'تسليم يدوي'
+                };
+            }
+
+            // 5. توليد رقم مرجعي مميز للإيصال (مثال: REF-0001234)
+            $referenceNumber = 'REF-' . str_pad($donation->id, 7, '0', STR_PAD_LEFT);
+
+            // 6. هيكلة البيانات لتطابق كارت "إيصال التبرع" في الفرونت إند تماماً
+            $receiptData = [
+                'id'               => $donation->id,
+                'reference_number' => $referenceNumber,
+                'status_en'        => $donation->status,
+                'status_ar'        => $statusAr,
+                'donation_type'    => $donation->donation_type,
+
+                // بيانات المنصة العلوية
+                'platform' => [
+                    'name'    => 'نبضة خير',
+                    'license' => '12345678',
+                ],
+
+                // القسم الرمادي (التفاصيل المالية)
+                'financials' => [
+                    'base_amount'  => number_format($baseAmount, 0),
+                    'fee_amount'   => number_format($feeAmount, 0),
+                    'total_amount' => number_format($totalAmount, 0),
+                    'currency'     => 'ج.م',
+                ],
+
+                'payment_method' => $methodAr,
+
+                // تفاصيل المتبرع والجهة
+                'donor' => [
+                    'name'  => $donation->donor_name ?? 'فاعل خير',
+                    'phone' => $donation->donor_phone ?? 'غير متوفر',
+                ],
+                'recipient_name' => $donation->foundation->name ?? 'مؤسسة عامة',
+                'date'           => Carbon::parse($donation->created_at)->translatedFormat('d F Y'), // مثال: 21 فبراير 2026
+
+                // المشروع والحملة
+                'project_name'   => $donation->foundationCase ? $donation->foundationCase->title : 'تبرع عام',
+                // إذا كان هناك تصنيف للحالة نضعه كاسم حملة، وإلا نضع نص افتراضي
+                'campaign_name'  => $donation->foundationCase->category ?? 'حملة عامة',
+            ];
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب تفاصيل الإيصال بنجاح.',
+                'data'    => $receiptData
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            Log::error("API User Donation Details Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء جلب تفاصيل الإيصال.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

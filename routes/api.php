@@ -32,16 +32,17 @@ use App\Http\Controllers\Api\Foundation\FoundationMessageController;
 use App\Http\Controllers\Api\Public\ContactFoundationController;
 use App\Http\Controllers\Api\Public\FoundationRatingController;
 use App\Http\Controllers\Api\Public\PublicCaseController;
-
+use App\Http\Controllers\Api\User\GoogleAuthController;
+use App\Http\Controllers\Api\User\DashboardController;
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
 
 use App\Http\Controllers\Api\Public\PlatformStatisticsController;
 
 // 🎯 جلب إحصائيات المنصة العامة (للرئيسية)
 Route::get('/statistics', [PlatformStatisticsController::class, 'index']);
-
 
 //reviews
 Route::get('/reviews', [ReviewController::class, 'index']);
@@ -93,15 +94,11 @@ Route::get('foundation/{id}/show', [FoundationController::class, 'show']);
 Route::get('/foundation/{id}/cases', [FoundationController::class, 'getFoundationCases']);
 Route::get('/cases/{caseId}', [FoundationController::class, 'getCaseDetails']);
 
-Route::middleware('auth:sanctum')->group(function () {
-    // 🎯 جلب سجل تبرعات المستخدم الحالي وإحصائياته (للوحة التحكم)
-    Route::get('/user/donations', [DonationController::class, 'index']);
-});
 // 🎯 جلب خدمات/حملات المؤسسة (التبويب الثاني في بروفايل المؤسسة)
 Route::get('/foundations/{id}/services', [FoundationController::class, 'getFoundationServices']);
 // 🎯 جلب جميع الحالات التابعة لخدمة معينة داخل مؤسسة محددة
 Route::get('/foundations/{foundationId}/services/{serviceId}/cases', [FoundationController::class, 'getFoundationServiceCases']);
-    Route::post('/foundations/{id}/send', [ContactFoundationController::class, 'store']);
+Route::post('/foundations/{id}/send', [ContactFoundationController::class, 'store']);
 
 // 🎯 جلب معلومات الاتصال والفروع الخاصة بمؤسسة (التبويب الأخير)
 Route::get('/foundations/{id}/contact', [FoundationController::class, 'getContactDetails']);
@@ -163,13 +160,16 @@ Route::prefix('foundation')->group(function () {
         Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
         Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
 
-Route::get('/messages', [FoundationMessageController::class, 'index']);
-Route::get('/messages/{id}', [FoundationMessageController::class, 'show']); // لفتح المودال
-    Route::post('/messages/{id}/reply', [FoundationMessageController::class, 'reply']);
-    Route::patch('/messages/{id}/toggle-read', [FoundationMessageController::class, 'toggleRead']);
-    Route::delete('/messages/{id}', [FoundationMessageController::class, 'destroy']);
+        Route::get('/messages', [FoundationMessageController::class, 'index']);
+        Route::get('/messages/{id}', [FoundationMessageController::class, 'show']); // لفتح المودال
+        Route::post('/messages/{id}/reply', [FoundationMessageController::class, 'reply']);
+        Route::patch('/messages/{id}/toggle-read', [FoundationMessageController::class, 'toggleRead']);
+        Route::delete('/messages/{id}', [FoundationMessageController::class, 'destroy']);
         // 🎯 لوحة التحكم الرئيسية للمؤسسة
         Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
+
+        Route::get('/ratings', [FoundationRatingController::class, 'index']);
+        Route::patch('/ratings/{id}/status', [FoundationRatingController::class, 'updateStatus']);
     });
 });
 
@@ -179,6 +179,7 @@ use App\Http\Controllers\Api\User\UserAuthController;
 use App\Http\Controllers\Api\Volunteer\ExploreOpportunityController;
 
 Route::prefix('user')->group(function () {
+    Route::post('/auth/google', [GoogleAuthController::class, 'handleGoogleLogin']);
     Route::post('/register', [UserAuthController::class, 'register']);
     Route::post('/login', [UserAuthController::class, 'login']);
     Route::middleware(['auth:sanctum', 'is_user'])->group(function () {
@@ -186,6 +187,9 @@ Route::prefix('user')->group(function () {
         Route::post('/change-password', [UserAuthController::class, 'updatePassword']);
         Route::get('/profile', [UserAuthController::class, 'profile']);
         Route::post('/logout', [UserAuthController::class, 'logout']);
+        Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('/donations/{id}', [DonationController::class, 'show']);
+        Route::get('/donations', [DonationController::class, 'index']);
     });
 });
 

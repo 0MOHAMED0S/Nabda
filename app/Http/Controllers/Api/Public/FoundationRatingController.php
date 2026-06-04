@@ -5,23 +5,21 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Controller;
 use App\Models\Foundation;
 use App\Models\FoundationRating;
-use App\Models\User; // أو Foundation حسب الموديل الخاص بالمؤسسات لديك
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 class FoundationRatingController extends Controller
 {
     /**
      * API: إضافة تقييم لمؤسسة (متاح للزوار والمستخدمين المسجلين)
      */
-public function store(Request $request, $foundationId): JsonResponse
+    public function store(Request $request, $foundationId): JsonResponse
     {
         try {
             // 1. التأكد من وجود المؤسسة
-            $foundation = \App\Models\Foundation::find($foundationId);
+            $foundation = Foundation::find($foundationId);
 
             if (!$foundation) {
                 return response()->json([
@@ -52,7 +50,7 @@ public function store(Request $request, $foundationId): JsonResponse
             $userId = auth('sanctum')->check() ? auth('sanctum')->id() : null;
 
             // 4. حفظ التقييم في قاعدة البيانات
-            $rating = \App\Models\FoundationRating::create([
+            $rating = FoundationRating::create([
                 'foundation_id' => $foundationId,
                 'user_id'       => $userId,
                 'rating'        => $request->rating,
@@ -78,12 +76,132 @@ public function store(Request $request, $foundationId): JsonResponse
                 'message' => 'تم إرسال تقييمك بنجاح. شكراً لمساهمتك في تحسين جودة الخدمة!',
                 'data'    => $rating
             ], 201, [], JSON_UNESCAPED_UNICODE);
-
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("API Public Foundation Rating Error: " . $e->getMessage());
+        } catch (Exception $e) {
+            Log::error("API Public Foundation Rating Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء إرسال التقييم.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * API: جلب جميع التقييمات الخاصة بالمؤسسة
+     */
+public function index(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $foundation = $request->user();
+
+            // 🛡️ حماية الصلاحيات: التأكد أن المستخدم الحالي هو "مؤسسة"
+            if (!$foundation instanceof \App\Models\Foundation) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'صلاحيات مرفوضة. هذا الحساب لا يملك صلاحيات مؤسسة.'
+                ], 403, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // جلب التقييمات ترتيباً من الأحدث للأقدم
+            // 🎯 أضفنا with('user') لتسريع جلب البيانات وعدم إرهاق قاعدة البيانات
+            $ratings = \App\Models\FoundationRating::with('user')
+                ->where('foundation_id', $foundation->id)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($rating) {
+
+                    // 🎯 جلب المستخدم من العلاقة مباشرة
+                    $user = $rating->user;
+
+                    // 🎯 معالجة صورة المستخدم أو وضع صورة افتراضية
+                    $avatarUrl = null;
+
+                    if ($user && $user->avatar) {
+                        $avatarUrl = filter_var($user->avatar, FILTER_VALIDATE_URL)
+                            ? $user->avatar
+                            : asset('storage/' . $user->avatar);
+                    } else {
+                        // يمكنك استخدام رابط لصورة افتراضية (Placeholder) إذا أردت
+                        // $avatarUrl = asset('assets/images/default-avatar.png');
+                    }
+
+                    // 🎯 تنسيق البيانات لتكون جاهزة وعملية للفرونت إند
+                    return [
+                        'id'          => $rating->id,
+                        'name'        => $rating->name ?? 'فاعل خير',
+                        'avatar_url'  => $avatarUrl,
+                        'rating'      => $rating->rating,
+                        'message'     => $rating->message,
+                        'is_approved' => (bool) $rating->is_approved,
+                        'date'        => $rating->created_at->format('Y-m-d'),
+                        'time_ago'    => $rating->created_at->diffForHumans(),
+                    ];
+                });
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب قائمة التقييمات بنجاح.',
+                'data'    => $ratings
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Get Ratings Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء جلب التقييمات.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * API: تحديث حالة التقييم (إظهار/إخفاء)
+     */
+    public function updateStatus(Request $request, $id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $foundation = $request->user();
+
+            // 🛡️ حماية الصلاحيات
+            if (!$foundation instanceof \App\Models\Foundation) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'صلاحيات مرفوضة.'
+                ], 403, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // التأكد أن التقييم موجود ويخص هذه المؤسسة تحديداً
+            $rating = \App\Models\FoundationRating::where('id', $id)
+                ->where('foundation_id', $foundation->id)
+                ->first();
+
+            if (!$rating) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'التقييم غير موجود أو لا تملك صلاحية تعديله.'
+                ], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // 🎯 تحديث الحالة (Toggle): نعكس الحالة الحالية مباشرة
+            $newState = !$rating->is_approved;
+
+            $rating->update([
+                'is_approved' => $newState
+            ]);
+
+            // صياغة رسالة نجاح ديناميكية بناءً على الحالة الجديدة
+            $statusMsg = $newState ? 'الموافقة على التقييم وإظهاره' : 'إخفاء التقييم';
+
+            return response()->json([
+                'status'  => true,
+                'message' => "تم {$statusMsg} بنجاح.",
+                'data'    => [
+                    'id'          => $rating->id,
+                    'is_approved' => (bool) $rating->is_approved
+                ]
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Update Rating Status Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء تحديث حالة التقييم.'
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }

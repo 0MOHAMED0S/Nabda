@@ -22,16 +22,17 @@ class UserAuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'title'    => 'nullable|string|max:100', // 🎯 تمت إضافة اللقب
             'name'     => 'required|string|min:2|max:255',
             'email'    => 'required|string|email|max:255|unique:users,email',
-            'phone'    => 'required|string|max:20|unique:users,phone',
+            'phone'    => 'nullable|string|max:20|unique:users,phone',
             'avatar'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             'password' => 'required|string|min:8|confirmed',
         ], [
             'name.required'      => 'يرجى إدخال اسمك الكامل.',
             'email.required'     => 'البريد الإلكتروني مطلوب.',
             'email.unique'       => 'هذا البريد الإلكتروني مسجل مسبقاً.',
-            'phone.required'     => 'رقم الهاتف مطلوب.',
+            'phone.nullable'     => 'رقم الهاتف اختياري.',
             'phone.unique'       => 'رقم الهاتف مسجل مسبقاً.',
             'password.required'  => 'كلمة المرور مطلوبة.',
             'password.min'       => 'كلمة المرور يجب أن تتكون من 8 أحرف على الأقل.',
@@ -45,38 +46,33 @@ class UserAuthController extends Controller
                 'status'  => false,
                 'message' => 'يرجى مراجعة البيانات المدخلة وإصلاح الأخطاء.',
                 'errors'  => $validator->errors()
-            ], 422);
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         $avatarPath = null;
 
         try {
-            // 🛡️ بدء معاملة قاعدة البيانات (Transaction) لضمان أمان العملية بالكامل
-            DB::beginTransaction();
+            \Illuminate\Support\Facades\DB::beginTransaction();
 
-            // 1. رفع الصورة أولاً (إذا وجدت)
             if ($request->hasFile('avatar')) {
                 $avatarPath = $request->file('avatar')->store('users/avatars', 'public');
             }
 
-            // 2. إنشاء المستخدم وتوحيد حالة الأحرف للإيميل (Sanitization)
-            $user = User::create([
+            $user = \App\Models\User::create([
+                'title'    => $request->title, // 🎯 حفظ اللقب
                 'name'     => trim($request->name),
                 'email'    => strtolower(trim($request->email)),
                 'phone'    => trim($request->phone),
                 'avatar'   => $avatarPath,
-                'password' => Hash::make($request->password),
+                'password' => \Illuminate\Support\Facades\Hash::make($request->password),
             ]);
 
-            // 3. إصدار التوكن
             $token = $user->createToken('UserAccess')->plainTextToken;
 
-            // 4. تأكيد حفظ البيانات في قاعدة البيانات
-            DB::commit();
+            \Illuminate\Support\Facades\DB::commit();
 
-            // إرفاق الرابط الكامل للصورة للاستجابة
             $user->avatar_url = $user->avatar ? asset('storage/' . $user->avatar) : null;
-            $user->makeHidden('avatar'); // إخفاء المسار القصير لتنظيف الـ JSON
+            $user->makeHidden('avatar');
 
             return response()->json([
                 'status'  => true,
@@ -85,32 +81,30 @@ class UserAuthController extends Controller
                     'user'  => $user,
                     'token' => $token
                 ]
-            ], 201);
-        } catch (Exception $e) {
-            // 🛡️ التراجع عن قاعدة البيانات في حال حدوث أي خطأ برمجي أو انقطاع
-            DB::rollBack();
+            ], 201, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
 
-            // 🛡️ حذف الصورة المرفوعة من السيرفر (Orphan File Prevention) حتى لا تستهلك مساحة
-            if ($avatarPath && Storage::disk('public')->exists($avatarPath)) {
-                Storage::disk('public')->delete($avatarPath);
+            if ($avatarPath && \Illuminate\Support\Facades\Storage::disk('public')->exists($avatarPath)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($avatarPath);
             }
 
-            Log::error('API User Register Error: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('API User Register Error: ' . $e->getMessage());
 
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني غير متوقع أثناء إنشاء الحساب. يرجى المحاولة لاحقاً.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /**
      * API: تسجيل الدخول (ذكي: يدعم الإيميل أو رقم الهاتف)
      */
-    public function login(Request $request): JsonResponse
+    public function login(Request $request): \Illuminate\Http\JsonResponse
     {
         // 1. التحقق من المدخلات (البريد الإلكتروني وكلمة المرور فقط)
-        $validator = Validator::make($request->all(), [
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'email'    => 'required|email',
             'password' => 'required|string',
         ], [
@@ -124,7 +118,7 @@ class UserAuthController extends Controller
                 'status'  => false,
                 'message' => 'بيانات مفقودة أو غير صالحة.',
                 'errors'  => $validator->errors()
-            ], 422);
+            ], 422, [], JSON_UNESCAPED_UNICODE);
         }
 
         try {
@@ -132,21 +126,25 @@ class UserAuthController extends Controller
             $email = strtolower(trim($request->email));
 
             // 3. البحث عن المستخدم بالبريد الإلكتروني فقط
-            $user = User::where('email', $email)->first();
+            $user = \App\Models\User::where('email', $email)->first();
 
             // 4. التحقق الأمني (تجنب الـ Timing Attacks)
-            if (!$user || !Hash::check($request->password, $user->password)) {
+            if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'status'  => false,
                     'message' => 'البريد الإلكتروني أو كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.'
-                ], 401);
+                ], 401, [], JSON_UNESCAPED_UNICODE);
             }
 
             // 5. إصدار التوكن
             $token = $user->createToken('UserAccess')->plainTextToken;
 
-            // 6. تهيئة البيانات للعرض (تهيئة رابط الصورة وإخفاء المسار الداخلي)
-            $user->avatar_url = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            // 🎯 6. تهيئة البيانات للعرض (معالجة رابط الصورة: جوجل أو محلي)
+            if ($user->avatar) {
+                $user->avatar_url = filter_var($user->avatar, FILTER_VALIDATE_URL) ? $user->avatar : asset('storage/' . $user->avatar);
+            } else {
+                $user->avatar_url = null;
+            }
             $user->makeHidden('avatar');
 
             return response()->json([
@@ -156,13 +154,13 @@ class UserAuthController extends Controller
                     'user'  => $user,
                     'token' => $token
                 ]
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('API User Login Error: ' . $e->getMessage());
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API User Login Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء تسجيل الدخول.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -182,19 +180,33 @@ class UserAuthController extends Controller
                     'message' => 'صلاحيات مرفوضة. هذا الحساب لا يملك صلاحيات المستخدم العادي.'
                 ], 403);
             }
+
+            // معالجة رابط الصورة (Google vs Local Storage)
+            $avatarUrl = null;
+            if ($user->avatar) {
+                if (filter_var($user->avatar, FILTER_VALIDATE_URL)) {
+                    // إذا كان رابط كامل (مثل جوجل)، نستخدمه مباشرة
+                    $avatarUrl = $user->avatar;
+                } else {
+                    // إذا كان مسار محلي، ندمجه مع رابط الموقع
+                    $avatarUrl = asset('storage/' . $user->avatar);
+                }
+            }
+
             // 🎯 تشكيل البيانات (Data Mapping) لضمان نظافة الـ JSON للفرونت إند
             $data = [
                 'id'                => $user->id,
+                'title'             => $user->title ?? null, // إضافة حقل اللقب
                 'name'              => $user->name,
                 'email'             => $user->email,
                 'phone'             => $user->phone,
-                'city'              => $user->city ?? '', // إرجاع نص فارغ بدلاً من null
+                'city'              => $user->city ?? null, // إرجاع null بدلاً من نص فارغ
 
                 // التأكد من إرجاع مصفوفة حتى لو لم يختر أي اهتمامات لتجنب أخطاء الفرونت إند
                 'charity_interests' => $user->charity_interests ?? [],
 
-                // رابط الصورة
-                'avatar_url'        => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                // رابط الصورة المعالج
+                'avatar_url'        => $avatarUrl,
 
                 // تواريخ منسقة
                 'joined_at'         => $user->created_at->format('Y-m-d'), // مثال: 2024-05-12
@@ -206,13 +218,13 @@ class UserAuthController extends Controller
                 'status'  => true,
                 'message' => 'تم جلب الملف الشخصي بكافة البيانات بنجاح.',
                 'data'    => $data
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('API User Profile Error: ' . $e->getMessage());
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API User Profile Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب الملف الشخصي.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
@@ -226,17 +238,19 @@ class UserAuthController extends Controller
                 return response()->json([
                     'status'  => false,
                     'message' => 'صلاحيات مرفوضة.'
-                ], 403);
+                ], 403, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. التحقق من المدخلات (ملاحظة استخدام Rule::unique لتجاهل الإيميل والهاتف الخاص بالمستخدم نفسه)
-            $validator = Validator::make($request->all(), [
+            // 2. التحقق من المدخلات
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                'title'             => 'nullable|string|max:100', // 🎯 إضافة التحقق من اللقب
                 'name'              => 'required|string|min:2|max:255',
-                'email'             => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-                'phone'             => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)],
+                'email'             => ['required', 'string', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+                // 🎯 جعلنا الهاتف nullable تحسباً لمستخدمي جوجل
+                'phone'             => ['nullable', 'string', 'max:20', \Illuminate\Validation\Rule::unique('users', 'phone')->ignore($user->id)],
                 'city'              => 'nullable|string|max:255',
-                'charity_interests' => 'nullable|array', // يجب أن ترسل كمصفوفة من الواجهة
-                'charity_interests.*' => 'string|max:100', // كل عنصر داخل المصفوفة يجب أن يكون نص
+                'charity_interests' => 'nullable|array',
+                'charity_interests.*' => 'string|max:100',
                 'avatar'            => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             ], [
                 'email.unique'             => 'هذا البريد الإلكتروني مستخدم لحساب آخر.',
@@ -250,7 +264,7 @@ class UserAuthController extends Controller
                     'status'  => false,
                     'message' => 'يرجى مراجعة البيانات المدخلة.',
                     'errors'  => $validator->errors()
-                ], 422);
+                ], 422, [], JSON_UNESCAPED_UNICODE);
             }
 
             // 3. معالجة تحديث الصورة (وإزالة القديمة)
@@ -261,36 +275,42 @@ class UserAuthController extends Controller
                 $user->avatar = $request->file('avatar')->store('users/avatars', 'public');
             }
 
-            // 4. تحديث باقي البيانات (مع تنظيف الإيميل)
+            // 4. تحديث باقي البيانات
+            $user->title             = $request->title; // 🎯 تحديث اللقب
             $user->name              = trim($request->name);
             $user->email             = strtolower(trim($request->email));
             $user->phone             = trim($request->phone);
             $user->city              = $request->city;
-            $user->charity_interests = $request->charity_interests; // سيتم تحويلها لـ JSON تلقائياً بفضل الـ Casts
+            $user->charity_interests = $request->charity_interests;
 
             $user->save();
 
             // 5. التنظيف الذكي (Orphan File Cleanup)
-            // إذا تم رفع صورة جديدة بنجاح، وكان هناك صورة قديمة بالفعل، احذف القديمة من السيرفر
-            if ($request->hasFile('avatar') && $oldAvatar && Storage::disk('public')->exists($oldAvatar)) {
-                Storage::disk('public')->delete($oldAvatar);
+            // 🎯 تأكدنا أن الصورة القديمة ليست رابط خارجي (مثل جوجل) قبل محاولة حذفها من السيرفر
+            if ($request->hasFile('avatar') && $oldAvatar && !filter_var($oldAvatar, FILTER_VALIDATE_URL) && \Illuminate\Support\Facades\Storage::disk('public')->exists($oldAvatar)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldAvatar);
             }
 
-            // 6. تجهيز البيانات للعرض
-            $user->avatar_url = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            // 6. تجهيز البيانات للعرض (معالجة رابط جوجل أو مسار السيرفر)
+            if ($user->avatar) {
+                $user->avatar_url = filter_var($user->avatar, FILTER_VALIDATE_URL) ? $user->avatar : asset('storage/' . $user->avatar);
+            } else {
+                $user->avatar_url = null;
+            }
+
             $user->makeHidden('avatar');
 
             return response()->json([
                 'status'  => true,
                 'message' => 'تم حفظ التغييرات بنجاح.',
                 'data'    => $user
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('API User Update Profile Error: ' . $e->getMessage());
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API User Update Profile Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء تحديث البيانات.',
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 

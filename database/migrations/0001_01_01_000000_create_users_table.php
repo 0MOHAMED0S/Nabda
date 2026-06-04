@@ -11,16 +11,17 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('title')->nullable();
             $table->string('email')->unique();
-            $table->string('phone')->unique();
+            $table->string('phone')->nullable();
             $table->string('avatar')->nullable();
 
             // 🎯 الحقول الجديدة المكتشفة من تصميم الواجهة
             $table->string('city')->nullable(); // المدينة
             $table->json('charity_interests')->nullable(); // الاهتمامات الخيرية (تخزن كمصفوفة)
-
+            $table->string('google_id')->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

@@ -87,7 +87,7 @@ class FoundationController extends Controller
     /**
      * API: جلب كافة تفاصيل مؤسسة واحدة معتمدة (العرض الشامل للبروفايل)
      */
-    public function show($id): JsonResponse
+public function show($id): JsonResponse
     {
         try {
             // 1. جلب المؤسسة مع العلاقات المباشرة (الفريق، الأسئلة الشائعة، الأهداف، الفروع)
@@ -164,10 +164,10 @@ class FoundationController extends Controller
                 ->count('volunteer_id');
 
             $data['impact_stats'] = [
-                'cases_count'     => $casesCount,
-                'campaigns_count' => $campaignsCount,
+                'cases_count'      => $casesCount,
+                'campaigns_count'  => $campaignsCount,
                 'volunteers_count' => $volunteersCount,
-                'total_donations' => $totalDonations,
+                'total_donations'  => $totalDonations,
             ];
 
             // ==========================================
@@ -176,12 +176,20 @@ class FoundationController extends Controller
             // جلب التقييمات المرتبطة بهذه المؤسسة (مفترض وجود موديل FoundationRating)
             // واستدعاء صورة المستخدم إن وجدت
             $ratings = \App\Models\FoundationRating::where('foundation_id', $id)
+                ->where('is_approved', true) // 🎯 عرض التقييمات الموافق عليها فقط
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($rating) {
                     // إذا كان التقييم مسجلاً باسم مستخدم في النظام، نجلب صورته، وإلا نرسل null ليضع الفرونت إند صورة افتراضية
                     $user = $rating->user_id ? \App\Models\User::find($rating->user_id) : null;
-                    $avatarUrl = ($user && $user->avatar) ? asset('storage/' . $user->avatar) : null;
+
+                    // 🎯 معالجة صورة المستخدم سواء كانت محلية أو من جوجل
+                    $avatarUrl = null;
+                    if ($user && $user->avatar) {
+                        $avatarUrl = filter_var($user->avatar, FILTER_VALIDATE_URL)
+                            ? $user->avatar
+                            : asset('storage/' . $user->avatar);
+                    }
 
                     return [
                         'id'         => $rating->id,

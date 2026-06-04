@@ -21,6 +21,7 @@ public function up(): void
         $table->integer('rating');
         $table->string('name')->default('فاعل خير');
         $table->string('message', 200)->nullable();
+        $table->boolean('is_approved')->default(false);
         $table->timestamps();
     });
 }
