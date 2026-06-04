@@ -167,8 +167,9 @@ public function update(Request $request)
             'working_hours'   => 'sometimes|nullable|string|max:255',
 
             // الصور (مع التحقق من الأبعاد للحفاظ على جودة التصميم)
-            'logo'            => 'sometimes|nullable|image|mimes:jpeg,png,jpg,webp|max:2048|dimensions:min_width=100,min_height=100',
-            'cover_image'     => 'sometimes|nullable|image|mimes:jpeg,png,jpg,webp|max:5120|dimensions:min_width=400,min_height=200',
+            'logo'               => 'sometimes|nullable|image|mimes:jpeg,png,jpg,webp|max:2048|dimensions:min_width=100,min_height=100',
+            'cover_image'        => 'sometimes|nullable|image|mimes:jpeg,png,jpg,webp|max:5120|dimensions:min_width=400,min_height=200',
+            'headquarters_image' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // تمت إضافة الفاليديشن الخاص بها أماناً
         ], $this->validationMessages());
 
         if ($validator->fails()) {
@@ -180,7 +181,7 @@ public function update(Request $request)
         }
 
         // التأكد من أن المستخدم أرسل بيانات فعلية لمنع استهلاك الموارد بطلبات فارغة
-        if (empty($request->all()) && !$request->hasFile('logo') && !$request->hasFile('cover_image')) {
+        if (empty($request->all()) && !$request->hasFile('logo') && !$request->hasFile('cover_image') && !$request->hasFile('headquarters_image')) {
             return response()->json([
                 'status'  => false,
                 'message' => 'لم يتم إرسال أي بيانات جديدة ليتم تحديثها.'
@@ -188,7 +189,7 @@ public function update(Request $request)
         }
 
         try {
-            // استخراج الحقول النصية فقط (استبعاد أي حقول ضارة إن وجدت)
+            // استخراج الحقول النصية فقط (استبعاد الحقول الخاصة بالصور لمنع الأخطاء)
             $data = $request->only([
                 'name', 'phone', 'email', 'type',
                 'about_desc_1', 'about_desc_2', 'vision', 'mission', 'core_mission',
@@ -210,6 +211,14 @@ public function update(Request $request)
                     Storage::disk('public')->delete($foundation->cover_image);
                 }
                 $data['cover_image'] = $request->file('cover_image')->store('foundations/covers', 'public');
+            }
+
+            // 3. معالجة وتحديث صورة المقر الرئيسي (التعديل المطلوب 🎯)
+            if ($request->hasFile('headquarters_image')) {
+                if ($foundation->headquarters_image && Storage::disk('public')->exists($foundation->headquarters_image)) {
+                    Storage::disk('public')->delete($foundation->headquarters_image);
+                }
+                $data['headquarters_image'] = $request->file('headquarters_image')->store('foundations/headquarters', 'public');
             }
 
             // التحديث النهائي في الداتابيز
