@@ -409,7 +409,7 @@ class DonationController extends Controller
     /**
      * API: جلب تفاصيل تبرع محدد (إيصال التبرع)
      */
-    public function show(Request $request, $id): JsonResponse
+public function show(Request $request, $id): JsonResponse
     {
         try {
             $userId = $request->user()->id;
@@ -428,7 +428,6 @@ class DonationController extends Controller
             }
 
             // 2. حساب المبالغ المالية (بناءً على الصورة: يتم إضافة 1% كرسوم خدمة)
-            // إذا كان التبرع عينياً، المبالغ ستكون 0
             $isFinancial = $donation->donation_type === 'financial';
             $baseAmount  = $isFinancial ? $donation->amount : 0;
             $feeAmount   = $isFinancial ? ($baseAmount * 0.01) : 0; // 1% رسوم خدمة افتراضية
@@ -466,6 +465,8 @@ class DonationController extends Controller
             // 6. هيكلة البيانات لتطابق كارت "إيصال التبرع" في الفرونت إند تماماً
             $receiptData = [
                 'id'               => $donation->id,
+                'case_id'          => $donation->case_id, // 🎯 تمت إضافة معرف الحالة
+                'foundation_id'    => $donation->foundation_id, // 🎯 تمت إضافة معرف المؤسسة
                 'reference_number' => $referenceNumber,
                 'status_en'        => $donation->status,
                 'status_ar'        => $statusAr,
@@ -477,7 +478,7 @@ class DonationController extends Controller
                     'license' => '12345678',
                 ],
 
-                // القسم الرمادي (التفاصيل المالية)
+                // القسم الرمادي (التفاصيل المالية - تُعرض كأصفار إذا كان التبرع عينياً)
                 'financials' => [
                     'base_amount'  => number_format($baseAmount, 0),
                     'fee_amount'   => number_format($feeAmount, 0),
@@ -485,7 +486,17 @@ class DonationController extends Controller
                     'currency'     => 'ج.م',
                 ],
 
-                'payment_method' => $methodAr,
+                // 🎯 إضافة كافة التفاصيل إذا كان التبرع عينياً (In-Kind)
+                'in_kind_details' => !$isFinancial ? [
+                    'category'    => $donation->item_category ?? 'غير محدد',
+                    'description' => $donation->item_description ?? 'لا يوجد وصف',
+                    'condition'   => $donation->item_condition ?? 'غير محدد',
+                    'address'     => $donation->donor_address ?? 'غير محدد',
+                    'pickup_time' => $donation->pickup_time ? \Carbon\Carbon::parse($donation->pickup_time)->translatedFormat('d F Y, h:i A') : 'غير محدد',
+                    'image_url'   => $donation->donation_image ? asset('storage/' . $donation->donation_image) : null,
+                ] : null,
+
+                'payment_method' => $methodAr, // تُستخدم كطريقة الدفع أو التسليم
 
                 // تفاصيل المتبرع والجهة
                 'donor' => [
@@ -493,12 +504,12 @@ class DonationController extends Controller
                     'phone' => $donation->donor_phone ?? 'غير متوفر',
                 ],
                 'recipient_name' => $donation->foundation->name ?? 'مؤسسة عامة',
-                'date'           => Carbon::parse($donation->created_at)->translatedFormat('d F Y'), // مثال: 21 فبراير 2026
+                'date'           => \Carbon\Carbon::parse($donation->created_at)->translatedFormat('d F Y'),
 
                 // المشروع والحملة
                 'project_name'   => $donation->foundationCase ? $donation->foundationCase->title : 'تبرع عام',
-                // إذا كان هناك تصنيف للحالة نضعه كاسم حملة، وإلا نضع نص افتراضي
-                'campaign_name'  => $donation->foundationCase->category ?? 'حملة عامة',
+                // التأكد بأمان من وجود الحالة قبل محاولة قراءة التصنيف
+                'campaign_name'  => $donation->foundationCase ? ($donation->foundationCase->category ?? 'حملة عامة') : 'حملة عامة',
             ];
 
             return response()->json([
@@ -507,8 +518,8 @@ class DonationController extends Controller
                 'data'    => $receiptData
             ], 200, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            Log::error("API User Donation Details Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API User Donation Details Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب تفاصيل الإيصال.'

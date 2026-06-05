@@ -170,6 +170,7 @@ Route::prefix('foundation')->group(function () {
 
         Route::get('/ratings', [FoundationRatingController::class, 'index']);
         Route::patch('/ratings/{id}/status', [FoundationRatingController::class, 'updateStatus']);
+        Route::delete('/ratings/{id}', [FoundationRatingController::class, 'destroy']);
     });
 });
 

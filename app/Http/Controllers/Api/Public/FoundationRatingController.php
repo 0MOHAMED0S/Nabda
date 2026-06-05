@@ -88,7 +88,7 @@ class FoundationRatingController extends Controller
     /**
      * API: جلب جميع التقييمات الخاصة بالمؤسسة
      */
-public function index(Request $request): \Illuminate\Http\JsonResponse
+    public function index(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $foundation = $request->user();
@@ -202,6 +202,51 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء تحديث حالة التقييم.'
+            ], 500, [], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * API: حذف التقييم نهائياً
+     */
+    public function destroy(Request $request, $id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $foundation = $request->user();
+
+            // 🛡️ حماية الصلاحيات: التأكد أن المستخدم الحالي هو "مؤسسة"
+            if (!$foundation instanceof \App\Models\Foundation) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'صلاحيات مرفوضة.'
+                ], 403, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // التأكد أن التقييم موجود ويخص هذه المؤسسة تحديداً
+            $rating = \App\Models\FoundationRating::where('id', $id)
+                ->where('foundation_id', $foundation->id)
+                ->first();
+
+            if (!$rating) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'التقييم غير موجود أو لا تملك صلاحية حذفه.'
+                ], 404, [], JSON_UNESCAPED_UNICODE);
+            }
+
+            // 🎯 تنفيذ عملية الحذف
+            $rating->delete();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم حذف التقييم بنجاح.'
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Delete Rating Error: " . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'حدث خطأ تقني أثناء حذف التقييم.'
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }

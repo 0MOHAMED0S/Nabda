@@ -18,77 +18,81 @@ class DashboardController extends Controller
     {
         try {
             $user = $request->user();
-            Carbon::setLocale('ar'); // لتعريب التواريخ إذا لزم الأمر
+            Carbon::setLocale('ar'); // لتعريب التواريخ
 
             // 1. الكروت العلوية (الإحصائيات الأساسية)
-            // نعتمد على التبرعات المكتملة (completed) في الحسابات
-            $completedDonations = Donation::where('user_id', $user->id)
+            // 🎯 تمت إضافة with('foundationCase') لمنع مشكلة N+1 وتقليل استهلاك الداتابيز
+            $completedDonations = Donation::with('foundationCase')
+                ->where('user_id', $user->id)
                 ->where('status', 'completed')
                 ->get();
 
             $totalDonationsCount = $completedDonations->count();
+            $totalAmount         = $completedDonations->where('donation_type', 'financial')->sum('amount');
 
-            $totalAmount = $completedDonations->where('donation_type', 'financial')->sum('amount');
+            // حساب عدد الحالات والجمعيات الفريدة
+            $supportedCasesCount       = $completedDonations->whereNotNull('case_id')->unique('case_id')->count();
+            $supportedFoundationsCount = $completedDonations->whereNotNull('foundation_id')->unique('foundation_id')->count();
 
-            // حساب عدد الحالات الفريدة التي تبرع لها
-            $supportedCasesCount = $completedDonations->whereNotNull('case_id')->unique('case_id')->count();
-
-            // حساب عدد الجمعيات الفريدة التي تبرع لها
-            $supportedFoundationsCount = $completedDonations->unique('foundation_id')->count();
-
-            // 2. نظام النقاط (كما هو موضح بالصورة: كل تبرع = 10 نقاط)
+            // 2. نظام النقاط والتصنيف
             $points = $totalDonationsCount * 10;
+            $badge  = $this->calculateBadge($points);
 
-            // تحديد رتبة المتبرع بناءً على النقاط (يمكنك تعديل الأرقام حسب نظامك)
-            $badge = 'متبرع مبادر';
-            if ($points >= 200) {
-                $badge = 'متبرع ماسي';
-            } elseif ($points >= 100) {
-                $badge = 'متبرع ذهبي';
-            } elseif ($points >= 50) {
-                $badge = 'متبرع فضي';
-            }
-
-            // 3. جدول آخر التبرعات (نجلب أحدث 5 تبرعات بغض النظر عن حالتها ليرى نشاطه الأخير)
-            $recentDonations = Donation::with(['foundation', 'case'])
+            // 3. جدول آخر التبرعات (أحدث 5 تبرعات)
+            $recentDonations = Donation::with(['foundation', 'foundationCase'])
                 ->where('user_id', $user->id)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get()
                 ->map(function ($donation) {
+                    $isFinancial = $donation->donation_type === 'financial';
+
+                    // 🎯 ترجمة حالة التبرع
+                    $statusAr = match ($donation->status) {
+                        'completed'  => 'مكتمل',
+                        'pending'    => 'قيد المراجعة',
+                        'processing' => 'جاري',
+                        'cancelled'  => 'ملغي',
+                        default      => 'غير محدد'
+                    };
+
                     return [
                         'id'              => $donation->id,
+                        'foundation_id'   => $donation->foundation_id, // 🎯 تمت إضافة معرف المؤسسة
+                        'case_id'         => $donation->case_id,       // 🎯 تمت إضافة معرف الحالة
                         'foundation_name' => $donation->foundation ? $donation->foundation->name : 'جمعية خيرية',
-                        'type'            => $donation->donation_type, // financial or in-kind
-                        'type_ar'         => $donation->donation_type === 'financial' ? 'مالي' : 'عيني',
+
+                        'type'            => $donation->donation_type,
+                        'type_ar'         => $isFinancial ? 'مالي' : 'عيني',
 
                         // التفاصيل (المبلغ أو اسم المادة العينية)
-                        'amount_or_item'  => $donation->donation_type === 'financial'
+                        'amount_or_item'  => $isFinancial
                                                 ? number_format($donation->amount) . ' ج.م'
                                                 : ($donation->item_category ?? 'مواد عينية'),
 
-                        // الوصف الفرعي (نوع المشروع أو وصف العيني)
-                        'description'     => $donation->donation_type === 'financial'
-                                                ? 'تبرع نقدي لصالح ' . ($donation->case ? $donation->case->title : 'عام')
+                        // الوصف الفرعي
+                        'description'     => $isFinancial
+                                                ? 'تبرع نقدي لصالح ' . ($donation->foundationCase ? $donation->foundationCase->title : 'عام')
                                                 : ($donation->item_description ?? 'تبرع عيني'),
 
-                        // طريقة الدفع أو التسليم (ترجمة الحالات لتعرض في الـ UI)
+                        // طريقة الدفع أو التسليم
                         'method'          => $this->translateMethod($donation),
 
-                        'date'            => $donation->created_at->translatedFormat('d M'), // مثال: 20 أكتوبر
+                        'status_en'       => $donation->status, // 🎯 حالة التبرع بالإنجليزية
+                        'status_ar'       => $statusAr,         // 🎯 حالة التبرع بالعربية
+
+                        'date'            => $donation->created_at->translatedFormat('d M Y'), // 🎯 تم التحديث لتشمل السنة ليكون التاريخ دقيقاً
                     ];
                 });
 
             // 4. الشارت (توزيع التبرعات)
-            // سنقوم بتجميع التبرعات حسب تصنيف الحالة أو وضعها كـ "أخرى"
             $distribution = $this->calculateDonationDistribution($completedDonations);
 
-            // تجميع البيانات للفرونت إند
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب بيانات لوحة التحكم بنجاح.',
                 'data'    => [
-                    'user_name' => explode(' ', $user->name)[0], // إرجاع الاسم الأول للترحيب "مرحباً Ahmed"
+                    'user_name' => explode(' ', $user->name)[0] ?? 'مرحباً',
                     'stats' => [
                         'total_donations' => $totalDonationsCount,
                         'total_amount'    => $totalAmount,
@@ -114,25 +118,37 @@ class DashboardController extends Controller
     }
 
     /**
+     * دالة مساعدة لتحديد رتبة المتبرع بناءً على النقاط
+     */
+    private function calculateBadge(int $points): string
+    {
+        if ($points >= 200) return 'متبرع ماسي';
+        if ($points >= 100) return 'متبرع ذهبي';
+        if ($points >= 50)  return 'متبرع فضي';
+
+        return 'متبرع مبادر';
+    }
+
+    /**
      * دالة مساعدة لترجمة طريقة الدفع أو التسليم للعربية
      */
     private function translateMethod($donation): string
     {
         if ($donation->donation_type === 'financial') {
             return match($donation->payment_method) {
-                'paymob' => 'بطاقة ائتمان',
+                'paymob'        => 'بطاقة ائتمان',
                 'bank_transfer' => 'تحويل بنكي',
-                'cash' => 'نقدي',
-                default => 'بطاقة ائتمان'
-            };
-        } else {
-            return match($donation->delivery_method) {
-                'home_pickup' => 'توصيل للمقر', // أو مندوب للمنزل
-                'branch_dropoff' => 'تسليم يدوي',
-                'collection_point' => 'نقطة تجميع',
-                default => 'تسليم يدوي'
+                'cash'          => 'نقدي',
+                default         => 'بطاقة ائتمان'
             };
         }
+
+        return match($donation->delivery_method) {
+            'home_pickup'      => 'توصيل للمقر',
+            'branch_dropoff'   => 'تسليم يدوي',
+            'collection_point' => 'نقطة تجميع',
+            default            => 'تسليم يدوي'
+        };
     }
 
     /**
@@ -145,11 +161,9 @@ class DashboardController extends Controller
 
         $categories = [];
 
-        // إذا كان لديك حقل category في موديل FoundationCase، نستخدمه.
-        // هنا نفترض وجوده، أو نستخدم فئات افتراضية
         foreach ($donations as $donation) {
-            $catName = $donation->case && $donation->case->category
-                        ? $donation->case->category
+            $catName = ($donation->foundationCase && $donation->foundationCase->category)
+                        ? $donation->foundationCase->category
                         : 'أخرى';
 
             if (!isset($categories[$catName])) {
