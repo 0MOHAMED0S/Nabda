@@ -118,8 +118,8 @@ public function index(Request $request): JsonResponse
                 }
 
                 // 5. ترجمة الحالة لتلوين الـ Badge في الفرونت إند (نشط أخضر / موقوف أحمر)
-                $data['status_ar'] = $data['status'] === 'active' ? 'نشط' : 'موقوف';
-
+                // $data['status_ar'] = $data['status'] === 'active' ? 'نشط' : 'موقوف';
+$data['status_ar'] = 'نشط';
                 // تنظيف المصفوفة من البيانات الكبيرة غير المستخدمة في الجدول
                 unset($data['volunteer_fields'], $data['governorates'], $data['national_id_front'], $data['national_id_back']);
 
