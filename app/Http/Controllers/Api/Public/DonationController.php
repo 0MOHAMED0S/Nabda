@@ -427,11 +427,9 @@ public function show(Request $request, $id): JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. حساب المبالغ المالية (بناءً على الصورة: يتم إضافة 1% كرسوم خدمة)
+            // 2. حساب المبالغ المالية (تم إزالة رسوم الخدمة والاحتفاظ بالإجمالي فقط)
             $isFinancial = $donation->donation_type === 'financial';
-            $baseAmount  = $isFinancial ? $donation->amount : 0;
-            $feeAmount   = $isFinancial ? ($baseAmount * 0.01) : 0; // 1% رسوم خدمة افتراضية
-            $totalAmount = $baseAmount + $feeAmount;
+            $totalAmount = $isFinancial ? $donation->amount : 0;
 
             // 3. ترجمة حالة التبرع
             $statusAr = match ($donation->status) {
@@ -480,9 +478,7 @@ public function show(Request $request, $id): JsonResponse
 
                 // القسم الرمادي (التفاصيل المالية - تُعرض كأصفار إذا كان التبرع عينياً)
                 'financials' => [
-                    'base_amount'  => number_format($baseAmount, 0),
-                    'fee_amount'   => number_format($feeAmount, 0),
-                    'total_amount' => number_format($totalAmount, 0),
+                    'total_amount' => number_format($totalAmount, 0), // 🎯 إرجاع الإجمالي فقط
                     'currency'     => 'ج.م',
                 ],
 
