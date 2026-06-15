@@ -167,7 +167,7 @@
                 <p class="text-[10px] uppercase tracking-widest text-slate-400 font-black px-4 mb-4 mt-2">إدارة المنصة
                 </p>
 
-@php
+                @php
                     $navItems = [
                         [
                             'is_group' => false,
@@ -287,6 +287,7 @@
                         ],
                     ];
                 @endphp
+
                 @foreach ($navItems as $item)
                     @if ($item['is_group'])
                         @php $isGroupActive = in_array(request()->route()->getName(), $item['active_routes']); @endphp

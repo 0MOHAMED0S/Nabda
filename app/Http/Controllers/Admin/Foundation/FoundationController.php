@@ -40,7 +40,7 @@ class FoundationController extends Controller
     /**
      * تحديث بيانات المؤسسة وحالة الاعتماد
      */
-public function update(Request $request, Foundation $foundation)
+    public function update(Request $request, Foundation $foundation)
     {
         try {
             $request->validate([

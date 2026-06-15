@@ -37,7 +37,6 @@ class ServiceController extends Controller
                 'message' => 'تم جلب الأقسام بنجاح.',
                 'data'    => $categories
             ], 200);
-
         } catch (Exception $e) {
             // 4. تسجيل الخطأ الفني في السيرفر أمنياً
             Log::error('API Categories Index Error: ' . $e->getMessage());
@@ -53,14 +52,16 @@ class ServiceController extends Controller
     /**
      * جلب جميع الخدمات مباشرة
      */
-    public function allServices()
+public function allServices()
     {
         try {
             // 1. تحسين الأداء العالي:
-            // - select: نجلب حقول الخدمة المطلوبة فقط.
+            // - select: نجلب حقول الخدمة المطلوبة فقط. (يجب أن تكون قبل withCount لتجنب الكتابة فوق الحقل المضاف)
             // - with('category:id,name'): نجلب حقلي الـ id والـ name فقط من جدول الأقسام المرتبط لتخفيف الحمل.
-            $services = Service::with('category:id,name')
-                ->select('id', 'title', 'description', 'image', 'category_id', 'created_at')
+            // - withCount: 🎯 نجلب عدد الحالات المرتبطة بالخدمة بكفاءة عالية.
+            $services = Service::select('id', 'title', 'description', 'image', 'category_id', 'created_at')
+                ->with('category:id,name')
+                ->withCount('foundationCases') // 🎯 إضافة عداد الحالات
                 ->latest()
                 ->get();
 
@@ -70,7 +71,7 @@ class ServiceController extends Controller
                     'status'  => true,
                     'message' => 'لا توجد خدمات متاحة حالياً.',
                     'data'    => []
-                ], 200);
+                ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
             // 3. إعادة التشكيل (Mapping) لتنسيق رابط الصورة واستخراج اسم القسم
@@ -81,6 +82,7 @@ class ServiceController extends Controller
                     'description'   => $service->description,
                     'image_url'     => $service->image ? asset('storage/' . $service->image) : null,
                     'category_name' => $service->category ? $service->category->name : null,
+                    'cases_count'   => $service->foundation_cases_count, // 🎯 إرجاع عدد الحالات في الاستجابة
                 ];
             });
 
@@ -88,22 +90,18 @@ class ServiceController extends Controller
                 'status'  => true,
                 'message' => 'تم جلب الخدمات بنجاح.',
                 'data'    => $data
-            ], 200);
-
-        } catch (Exception $e) {
-            Log::error('API All Services Error: ' . $e->getMessage());
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API All Services Error: ' . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني في الخادم أثناء جلب الخدمات.',
                 'data'    => []
-            ], 500);
+            ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
     /**
-     * API: جلب جميع الحالات التابعة لخدمة معينة (بناءً على service_id)
-     */
-/**
      * API: جلب جميع الحالات التابعة لخدمة معينة (بناءً على service_id)
      */
     public function getServiceCases(Request $request, $serviceId): JsonResponse
@@ -124,7 +122,7 @@ class ServiceController extends Controller
             $cases = FoundationCase::with(['foundation:id,name,logo', 'service.category'])
                 ->where('service_id', $serviceId)
                 ->where('status', 'active')
-                ->whereHas('foundation', function($q) {
+                ->whereHas('foundation', function ($q) {
                     // شرط إضافي لضمان عدم جلب حالات لمؤسسات تم إيقافها
                     $q->where('status', 'active')->where('approval_status', 'approved');
                 })
@@ -203,7 +201,6 @@ class ServiceController extends Controller
 
                 'data'    => $cases
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Get Service Cases Error: " . $e->getMessage());
             return response()->json([
@@ -213,11 +210,16 @@ class ServiceController extends Controller
         }
     }
 
-public function show($id): JsonResponse
+public function show($id): \Illuminate\Http\JsonResponse
     {
         try {
             // 1. جلب الخدمة مع تصنيفها (Category)
-            $service = Service::with('category')->find($id);
+            // 🎯 ودمج استعلام عدد الحالات "النشطة" بكفاءة عالية في نفس الطلب
+            $service = \App\Models\Service::with('category')
+                ->withCount(['foundationCases as active_cases_count' => function ($query) {
+                    $query->where('status', 'active');
+                }])
+                ->find($id);
 
             if (!$service) {
                 return response()->json([
@@ -227,17 +229,12 @@ public function show($id): JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. 🎯 إحصائية إضافية: جلب عدد الحالات "النشطة" المرتبطة بهذه الخدمة
-            $activeCasesCount = FoundationCase::where('service_id', $id)
-                                              ->where('status', 'active')
-                                              ->count();
-
-            // 3. استخراج رابط الصورة بأمان (تم تصحيح startsWith هنا ✅)
+            // 2. استخراج رابط الصورة بأمان
             $imageUrl = !empty($service->image) && !\Illuminate\Support\Str::startsWith($service->image, ['http://', 'https://'])
                 ? asset('storage/' . $service->image)
                 : ($service->image ?? null);
 
-            // 4. تشكيل الاستجابة النهائية
+            // 3. تشكيل الاستجابة النهائية
             $data = [
                 'id'                 => $service->id,
                 'title'              => $service->title,
@@ -249,7 +246,7 @@ public function show($id): JsonResponse
                 'category_name'      => $service->category->name ?? 'غير مصنف',
 
                 // إحصائيات وتواريخ
-                'active_cases_count' => $activeCasesCount,
+                'active_cases_count' => $service->active_cases_count ?? 0, // 🎯 تم جلبها مباشرة من الاستعلام
                 'created_at'         => $service->created_at ? $service->created_at->format('Y-m-d') : null,
             ];
 
@@ -258,9 +255,8 @@ public function show($id): JsonResponse
                 'message' => 'تم جلب تفاصيل الخدمة بنجاح.',
                 'data'    => $data
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
-        } catch (Exception $e) {
-            Log::error("API Get Service Details Error (ID: {$id}): " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Get Service Details Error (ID: {$id}): " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب بيانات الخدمة.',
