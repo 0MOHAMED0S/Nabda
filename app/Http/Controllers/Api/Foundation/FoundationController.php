@@ -468,11 +468,11 @@ public function getCaseDetails($caseId): JsonResponse
 /**
      * API: جلب خدمات / حملات المؤسسة (بدون شريط التقدم المالي - لتبويب الخدمات) - بدون Pagination
      */
-    public function getFoundationServices(Request $request, $id): JsonResponse
+public function getFoundationServices(Request $request, $id): \Illuminate\Http\JsonResponse
     {
         try {
             // 1. التأكد من وجود المؤسسة واعتمادها
-            $foundation = Foundation::where('status', 'active')->where('approval_status', 'approved')->find($id);
+            $foundation = \App\Models\Foundation::where('status', 'active')->where('approval_status', 'approved')->find($id);
 
             if (!$foundation) {
                 return response()->json([
@@ -483,15 +483,20 @@ public function getCaseDetails($caseId): JsonResponse
             }
 
             // 2. 🎯 جلب أرقام الخدمات المرتبطة بحالات المؤسسة النشطة بشكل فريد
-            $serviceIds = FoundationCase::where('foundation_id', $id)
+            $serviceIds = \App\Models\FoundationCase::where('foundation_id', $id)
                 ->where('status', 'active')
                 ->whereNotNull('service_id')
                 ->distinct()
                 ->pluck('service_id');
 
-            // 3. جلب بيانات هذه الخدمات مع التصنيفات التابعة لها
-            $services = Service::with('category')
+            // 3. جلب بيانات هذه الخدمات مع التصنيفات التابعة لها وحساب عدد الحالات
+            $services = \App\Models\Service::with('category')
                 ->whereIn('id', $serviceIds)
+                // 🎯 إضافة حساب عدد الحالات النشطة التابعة لهذه المؤسسة وهذه الخدمة
+                ->withCount(['foundationCases as cases_count' => function ($query) use ($id) {
+                    $query->where('foundation_id', $id)
+                          ->where('status', 'active');
+                }])
                 ->orderBy('created_at', 'desc')
                 ->get(); // بدون Pagination
 
@@ -510,6 +515,8 @@ public function getCaseDetails($caseId): JsonResponse
                     // 🎯 جلب اسم التصنيف من العلاقة، وإذا لم يوجد نكتب 'عام'
                     'category'    => $service->category->name ?? 'عام',
                     'image_url'   => $imageUrl,
+                    // 🎯 إضافة عدد الحالات هنا
+                    'cases_count' => $service->cases_count ?? 0,
                 ];
             });
 

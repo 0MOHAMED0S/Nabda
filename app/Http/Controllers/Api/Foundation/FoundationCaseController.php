@@ -247,7 +247,7 @@ public function store(Request $request)
     }
 
     /** 3. عرض حالة واحدة مع حساباتها */
-    public function show(Request $request, $id)
+public function show(Request $request, $id)
     {
         try {
             // 1. 🎯 جلب الحالة مع حساب التبرعات وجلب علاقة الخدمة والتصنيف
@@ -265,7 +265,9 @@ public function store(Request $request)
                 return response()->json(['status' => false, 'message' => 'الحالة غير موجودة.'], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            $isFinancial = $case->goal_type === 'financial';
+            // 🎯 التعديل هنا: نعتبر الحالة مالية إذا كانت 'financial' أو 'both' لكي تظهر الأرقام بشكل صحيح
+            $isFinancial = in_array($case->goal_type, ['financial', 'both']);
+
             $collected = $isFinancial ? ($case->collected_amount ?? 0) : ($case->donors_count ?? 0);
             $percentage = null;
 
@@ -311,6 +313,7 @@ public function store(Request $request)
             }
 
             // 4. إضافة الحسابات الإضافية للواجهة
+            // 🎯 الآن ستعرض target_amount بشكل صحيح في حالة الـ both والـ financial
             $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
             $caseData['collected_amount']      = $collected;
             $caseData['completion_percentage'] = $percentage;

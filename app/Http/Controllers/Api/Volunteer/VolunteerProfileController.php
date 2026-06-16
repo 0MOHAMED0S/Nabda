@@ -117,7 +117,7 @@ class VolunteerProfileController extends Controller
     /**
      * API: تحديث بيانات الملف الشخصي للمتطوع بصرامة
      */
-    public function update(Request $request): \Illuminate\Http\JsonResponse
+public function update(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $volunteer = $request->user();
@@ -136,10 +136,13 @@ class VolunteerProfileController extends Controller
                     'exists:foundations,id'
                 ],
 
-                // ... (باقي الحقول الخاصة بك مثل الصورة والبطاقة)
+                // 🎯 إضافة التحقق من الصورة
+                'avatar'         => 'sometimes|image|mimes:jpeg,png,jpg,webp|max:5120',
             ], [
                 'foundation_id.required_if'   => 'يرجى اختيار المؤسسة التابع لها.',
                 'foundation_id.prohibited_if' => 'لا يمكنك اختيار مؤسسة لأن نوع التطوع "عام".',
+                'avatar.image'                => 'يجب أن يكون الملف المرفق صورة صالحة.',
+                'avatar.max'                  => 'حجم الصورة يجب ألا يتجاوز 5 ميجابايت.',
             ]);
 
             if ($validator->fails()) {
@@ -167,9 +170,25 @@ class VolunteerProfileController extends Controller
                 }
             }
 
-            // (هنا يمكنك إضافة كود تحديث الصور إذا لزم الأمر بنفس طريقتنا السابقة)
+            // 4. 🎯 معالجة وتحديث الصورة الشخصية (Avatar)
+            if ($request->hasFile('avatar')) {
+                // مسح الصورة القديمة من السيرفر إذا كانت موجودة ولا تخص روابط خارجية (مثل جوجل)
+                if ($volunteer->avatar && !filter_var($volunteer->avatar, FILTER_VALIDATE_URL) && \Illuminate\Support\Facades\Storage::disk('public')->exists($volunteer->avatar)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($volunteer->avatar);
+                }
+
+                // رفع الصورة الجديدة وحفظ مسارها
+                $volunteer->avatar = $request->file('avatar')->store('volunteers/avatars', 'public');
+            }
 
             $volunteer->save();
+
+            // تجهيز رابط الصورة الكامل في الاستجابة (اختياري لسهولة عرضها في الفرونت إند)
+            if ($volunteer->avatar) {
+                $volunteer->avatar_url = filter_var($volunteer->avatar, FILTER_VALIDATE_URL)
+                    ? $volunteer->avatar
+                    : asset('storage/' . $volunteer->avatar);
+            }
 
             return response()->json([
                 'status'  => true,

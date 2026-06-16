@@ -16,15 +16,14 @@ class FoundationVolunteerController extends Controller
     /**
      * API: جلب قائمة المتطوعين مع الإحصائيات والبحث (تطابق الشاشة تماماً)
      */
-public function index(Request $request): JsonResponse
+public function index(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $foundationId = $request->user()->id;
 
-            // جلب المتطوعين الذين لديهم ارتباط بأي فرصة تخص هذه المؤسسة
-            $query = Volunteer::whereHas('opportunities', function ($q) use ($foundationId) {
-                $q->where('foundation_id', $foundationId);
-            });
+            // 🎯 التعديل هنا: جلب جميع المتطوعين في النظام (بدون تقييدهم بفرص المؤسسة)
+            // إذا أردت عرض المتطوعين المعتمدين فقط يمكنك تغييرها إلى: Volunteer::where('status', 'approved');
+            $query = \App\Models\Volunteer::query();
 
             // ==========================================
             // 1. حساب الإحصائيات العلوية (المربعات الأربعة)
@@ -85,12 +84,12 @@ public function index(Request $request): JsonResponse
                                       });
                                 }], 'created_at')
                                 ->orderBy('created_at', 'desc')
-                                ->get(); // 👈 استبدال paginate بـ get
+                                ->get();
 
             // ==========================================
             // 4. تهيئة البيانات والتنظيف للواجهة (Frontend)
             // ==========================================
-            $volunteers->transform(function ($volunteer) { // 👈 استخدام transform مباشرة
+            $volunteers->transform(function ($volunteer) {
                 $data = $volunteer->toArray();
 
                 // 1. رابط الصورة الشخصية
@@ -107,7 +106,7 @@ public function index(Request $request): JsonResponse
 
                 // 3. تاريخ آخر نشاط
                 $data['last_activity_date'] = $data['last_activity_date']
-                    ? Carbon::parse($data['last_activity_date'])->format('Y-m-d')
+                    ? \Carbon\Carbon::parse($data['last_activity_date'])->format('Y-m-d')
                     : 'لم يشارك بعد';
 
                 // 4. استخراج المجال (طبي، تعليم، إغاثة...)
@@ -117,9 +116,9 @@ public function index(Request $request): JsonResponse
                     $data['primary_field'] = 'عام';
                 }
 
-                // 5. ترجمة الحالة لتلوين الـ Badge في الفرونت إند (نشط أخضر / موقوف أحمر)
-                // $data['status_ar'] = $data['status'] === 'active' ? 'نشط' : 'موقوف';
-$data['status_ar'] = 'نشط';
+                // 5. ترجمة الحالة لتلوين الـ Badge في الفرونت إند
+                $data['status_ar'] = 'نشط';
+
                 // تنظيف المصفوفة من البيانات الكبيرة غير المستخدمة في الجدول
                 unset($data['volunteer_fields'], $data['governorates'], $data['national_id_front'], $data['national_id_back']);
 
@@ -135,8 +134,8 @@ $data['status_ar'] = 'نشط';
                 ]
             ], 200, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            Log::error("API Foundation Volunteers Index Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Volunteers Index Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب البيانات.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
