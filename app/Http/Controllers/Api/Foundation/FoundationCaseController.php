@@ -54,7 +54,7 @@ class FoundationCaseController extends Controller
 
     /** 1. جلب كل الحالات (مع الإحصائيات وكل تفاصيل الحالة) */
 
-    public function index(Request $request)
+public function index(Request $request)
     {
         try {
             // 1. 🎯 تحديث الاستعلام لجلب الخدمة + تصنيف الخدمة (Nested Relationship)
@@ -77,7 +77,9 @@ class FoundationCaseController extends Controller
             ];
 
             $formattedCases = $cases->map(function ($case) {
-                $isFinancial = $case->goal_type === 'financial';
+                // 🎯 التعديل هنا: نعتبر الحالة مالية إذا كانت 'financial' أو 'both'
+                $isFinancial = in_array($case->goal_type, ['financial', 'both']);
+
                 $collected = $isFinancial ? ($case->collected_amount ?? 0) : ($case->donors_count ?? 0);
                 $percentage = null;
 
