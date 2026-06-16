@@ -169,6 +169,13 @@
 
                 @php
                     $navItems = [
+                        // -------- الإشعارات --------
+                        [
+                            'is_group' => false,
+                            'route' => 'admin.notifications.index',
+                            'icon' => 'fa-bell',
+                            'label' => 'إشعارات النظام',
+                        ],
                         [
                             'is_group' => false,
                             'route' => 'admin.dashboard',
@@ -226,7 +233,13 @@
                                 ['route' => 'admin.foundations.approved', 'label' => 'المؤسسات المعتمدة'],
                             ],
                         ],
-
+// -------- إدارة المستخدمين (الجديدة) --------
+                        [
+                            'is_group' => false,
+                            'route' => 'admin.users.index',
+                            'icon' => 'fa-users-gear', // أيقونة تعبر عن إدارة المستخدمين
+                            'label' => 'إدارة المستخدمين',
+                        ],
                         // -------- المجموعة الجديدة: إدارة المتطوعين --------
                         [
                             'is_group' => true,
@@ -285,6 +298,7 @@
                                 ['route' => 'admin.reviews.index', 'label' => 'آراء المبدعين'],
                             ],
                         ],
+
                     ];
                 @endphp
 

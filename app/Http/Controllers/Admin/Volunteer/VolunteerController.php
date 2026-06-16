@@ -39,7 +39,7 @@ class VolunteerController extends Controller
     /**
      * تحديث بيانات المتطوع وحالة الاعتماد
      */
-public function update(Request $request, Volunteer $volunteer)
+    public function update(Request $request, Volunteer $volunteer)
     {
         try {
             $request->validate([
@@ -162,6 +162,114 @@ public function update(Request $request, Volunteer $volunteer)
         } catch (Exception $e) {
             Log::error("Volunteer Approved Index Error: " . $e->getMessage());
             return back()->with('error', 'حدث خطأ أثناء جلب بيانات المتطوعين المعتمدين.');
+        }
+    }
+
+    /**
+     * إضافة متطوع جديد من قبل الإدارة (معتمد وتلقائي التفعيل)
+     */
+    public function store(Request $request)
+    {
+        try {
+            // 1. قواعد التحقق (نفس القواعد الصارمة المطلوبة)
+            $request->validate([
+                // البيانات الشخصية
+                'name'              => 'required|string|min:2|max:255',
+                'email'             => 'required|string|email|max:255|unique:volunteers,email',
+                'phone'             => 'required|string|max:20|unique:volunteers,phone',
+                'address'           => 'required|string|max:500',
+
+                // بيانات التطوع
+                'volunteer_type'    => 'required|in:general,affiliated',
+                'foundation_id'     => 'prohibited_if:volunteer_type,general|required_if:volunteer_type,affiliated|nullable|integer|exists:foundations,id',
+                'volunteer_fields'  => 'nullable|array',
+                'volunteer_fields.*'=> 'string|max:100',
+                'governorates'      => 'nullable|array',
+                'governorates.*'    => 'string|max:100',
+
+                // البيانات الحساسة والمرفقات
+                'avatar'            => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'national_id'       => 'required|string|size:14|unique:volunteers,national_id',
+                'national_id_front' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'national_id_back'  => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'password'          => 'required|string|min:8|confirmed',
+            ], [
+                'foundation_id.prohibited_if' => 'لا يمكنك اختيار مؤسسة محددة عندما يكون نوع التطوع "عام".',
+                'foundation_id.required_if'   => 'يرجى اختيار المؤسسة بما أنك اخترت التطوع التابع.',
+                'national_id.size'            => 'الرقم القومي يجب أن يتكون من 14 رقماً.',
+                'national_id.unique'          => 'هذا الرقم القومي مسجل لدينا مسبقاً.',
+                'email.unique'                => 'هذا البريد الإلكتروني مسجل مسبقاً.',
+                'phone.unique'                => 'رقم الهاتف مسجل مسبقاً.',
+                'national_id_front.required'  => 'صورة الوجه الأمامي للبطاقة مطلوبة.',
+                'national_id_back.required'   => 'صورة الوجه الخلفي للبطاقة مطلوبة.',
+                'password.confirmed'          => 'تأكيد كلمة المرور غير متطابق.',
+                '*.required'                  => 'هذا الحقل أو الملف مطلوب.',
+                '*.image'                     => 'الملف يجب أن يكون صورة صحيحة.',
+            ]);
+        } catch (ValidationException $e) {
+            // نمرر form_type لكي يفتح الـ Modal الخاص بالإضافة تلقائياً في الواجهة في حال وجود أخطاء
+            return back()->withErrors($e->validator)->withInput()->with('form_type', 'create');
+        }
+
+        // متغيرات لتتبع مسارات الملفات من أجل التنظيف الذكي
+        $avatarPath  = null;
+        $idFrontPath = null;
+        $idBackPath  = null;
+
+        try {
+            // 2. رفع الملفات بشكل آمن
+            if ($request->hasFile('avatar')) {
+                $avatarPath = $request->file('avatar')->store('volunteers/avatars', 'public');
+            }
+            $idFrontPath = $request->file('national_id_front')->store('volunteers/national_ids', 'public');
+            $idBackPath  = $request->file('national_id_back')->store('volunteers/national_ids', 'public');
+
+            // 3. إنشاء سجل المتطوع (معتمد فوراً لأن الإدمن هو من يضيفه)
+            $volunteer = Volunteer::create([
+                'name'              => trim($request->name),
+                'email'             => strtolower(trim($request->email)),
+                'phone'             => trim($request->phone),
+                'address'           => trim($request->address),
+
+                'volunteer_type'    => $request->volunteer_type,
+                'foundation_id'     => $request->volunteer_type === 'affiliated' ? $request->foundation_id : null,
+
+                'volunteer_fields'  => $request->volunteer_fields,
+                'governorates'      => $request->governorates,
+                'avatar'            => $avatarPath,
+
+                'national_id'       => $request->national_id,
+                'national_id_front' => $idFrontPath,
+                'national_id_back'  => $idBackPath,
+                'password'          => \Illuminate\Support\Facades\Hash::make($request->password),
+
+                'status'            => 'approved', // 🎯 معتمد ومقبول فوراً
+            ]);
+
+            // 4. إرسال إشعار للمؤسسة (إذا كان تابعاً لها)
+            if ($volunteer->foundation_id) {
+                $foundationToNotify = \App\Models\Foundation::find($volunteer->foundation_id);
+                if ($foundationToNotify) {
+                    $foundationToNotify->notify(new \App\Notifications\GeneralNotification(
+                        'متطوع جديد 🤝',
+                        "تم إضافة المتطوع {$volunteer->name} وربطه بمؤسستكم من قبل الإدارة.",
+                        'success'
+                    ));
+                }
+            }
+
+            return back()->with('success', 'تم إضافة المتطوع واعتماده بنجاح.');
+
+        } catch (Exception $e) {
+            // 🛡️ التنظيف الذكي: إذا فشل الحفظ في قاعدة البيانات لأي سبب تقني، نمسح الصور التي تم رفعها
+            foreach ([$avatarPath, $idFrontPath, $idBackPath] as $path) {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+
+            Log::error("Admin Volunteer Create Error: " . $e->getMessage());
+            return back()->with('error', 'حدث خطأ تقني غير متوقع أثناء إضافة المتطوع.');
         }
     }
 }

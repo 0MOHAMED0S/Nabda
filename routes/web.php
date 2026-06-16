@@ -6,11 +6,13 @@ use App\Http\Controllers\Admin\aboutUs\AboutHistoryController;
 use App\Http\Controllers\Admin\aboutUs\AboutUsController;
 use App\Http\Controllers\Admin\aboutUs\AboutVisionController;
 use App\Http\Controllers\Admin\aboutUs\TeamController;
+use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\Articles\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\Contacts\BranchController;
 
 use App\Http\Controllers\Admin\Contacts\ContactInfoController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\Foundation\FoundationController;
 use App\Http\Controllers\Admin\hero\HeroController;
@@ -18,6 +20,7 @@ use App\Http\Controllers\Admin\hero\TickerController;
 use App\Http\Controllers\Admin\Rate\ReviewController;
 use App\Http\Controllers\Admin\Service\CategoryController;
 use App\Http\Controllers\Admin\Service\ServiceController;
+use App\Http\Controllers\Admin\User\UserController;
 use App\Http\Controllers\Admin\ZakatConditionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Volunteer\VolunteerController;
@@ -36,8 +39,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
     // Protected routes
     Route::middleware(['admin'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-        Route::view('/dashboard', 'admin.index')->name('dashboard');
-
+Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('profile', [AuthController::class, 'profile'])->name('profile');
         Route::put('profile/update', [AuthController::class, 'updateProfile'])->name('profile.update');
         Route::put('profile/password', [AuthController::class, 'updatePassword'])->name('profile.password');
@@ -88,6 +90,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::put('/{foundation}', [FoundationController::class, 'update'])->name('update');
             Route::put('/{foundation}/reject', [FoundationController::class, 'reject'])->name('reject'); // مسار الرفض
             Route::delete('/{foundation}', [FoundationController::class, 'destroy'])->name('destroy');
+            Route::post('/foundations', [FoundationController::class, 'store'])->name('store');
         });
 
         // ضع هذه الأسطر داخل الـ Route::group الخاص بلوحة تحكم الإدارة (Admin)
@@ -97,6 +100,18 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::put('/{volunteer}', [VolunteerController::class, 'update'])->name('update');
             Route::patch('/{volunteer}/reject', [VolunteerController::class, 'reject'])->name('reject');
             Route::delete('/{volunteer}', [VolunteerController::class, 'destroy'])->name('destroy');
+            Route::post('/volunteers', [VolunteerController::class, 'store'])->name('store');
         });
+
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+
+    Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/mark-all-as-read', [AdminNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+    Route::put('/notifications/{id}/mark-as-read', [AdminNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+    Route::delete('/notifications/{id}', [AdminNotificationController::class, 'destroy'])->name('notifications.destroy');
     });
 });

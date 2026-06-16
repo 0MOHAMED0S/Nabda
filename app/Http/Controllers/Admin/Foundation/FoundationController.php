@@ -164,4 +164,80 @@ class FoundationController extends Controller
             return back()->with('error', 'حدث خطأ أثناء جلب بيانات المؤسسات المعتمدة.');
         }
     }
+
+    /**
+     * إضافة مؤسسة جديدة من قبل الإدارة (معتمدة ونشطة تلقائياً)
+     */
+    public function store(Request $request)
+    {
+        try {
+            $request->validate([
+                // البيانات الأساسية
+                'name'                  => 'required|string|max:255',
+                'email'                 => 'required|string|email|max:255|unique:foundations',
+                'phone'                 => 'required|string|max:20|unique:foundations',
+                'type'                  => 'required|string|max:100',
+
+                // بيانات الترخيص
+                'license_number'        => 'required|string|max:255',
+                'supervising_authority' => 'required|string|max:255',
+
+                // الملفات والمستندات
+                'license_image'         => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
+                'commercial_register'   => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
+                'tax_card'              => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
+                'accreditation_letter'  => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
+
+                // الصور وكلمة المرور
+                'headquarters_image'    => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'logo'                  => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+                'password'              => 'required|string|min:8|confirmed',
+            ], [
+                'name.required'         => 'اسم المؤسسة مطلوب.',
+                'email.unique'          => 'هذا البريد الإلكتروني مسجل مسبقاً.',
+                'phone.unique'          => 'رقم الهاتف مسجل مسبقاً.',
+                'password.confirmed'    => 'تأكيد كلمة المرور غير متطابق.',
+                '*.required'            => 'هذا الحقل أو الملف مطلوب.',
+                '*.file'                => 'الملف المرفق غير صالح.',
+                '*.mimes'               => 'الصيغ المدعومة للملفات هي: jpeg, png, jpg, pdf.',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // نمرر form_type لكي يفتح الـ Modal الخاص بالإضافة تلقائياً في حال وجود خطأ
+            return back()->withErrors($e->validator)->withInput()->with('form_type', 'create');
+        }
+
+        try {
+            // تخزين الملفات والصور
+            $license_image        = $request->file('license_image')->store('foundations/documents', 'public');
+            $commercial_register  = $request->file('commercial_register')->store('foundations/documents', 'public');
+            $tax_card             = $request->file('tax_card')->store('foundations/documents', 'public');
+            $accreditation_letter = $request->file('accreditation_letter')->store('foundations/documents', 'public');
+            $headquarters_image   = $request->file('headquarters_image')->store('foundations/images', 'public');
+            $logo                 = $request->file('logo')->store('foundations/logos', 'public');
+
+            // إنشاء المؤسسة (معتمدة ونشطة فوراً 🎯)
+            Foundation::create([
+                'name'                  => $request->name,
+                'email'                 => $request->email,
+                'phone'                 => $request->phone,
+                'type'                  => $request->type,
+                'license_number'        => $request->license_number,
+                'supervising_authority' => $request->supervising_authority,
+                'password'              => \Illuminate\Support\Facades\Hash::make($request->password),
+                'license_image'         => $license_image,
+                'commercial_register'   => $commercial_register,
+                'tax_card'              => $tax_card,
+                'accreditation_letter'  => $accreditation_letter,
+                'headquarters_image'    => $headquarters_image,
+                'logo'                  => $logo,
+                'approval_status'       => 'approved', // 🎯 معتمدة تلقائياً
+                'status'                => 'active',   // 🎯 حساب نشط
+            ]);
+
+            return back()->with('success', 'تم إضافة المؤسسة واعتمادها بنجاح.');
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Admin Foundation Create Error: " . $e->getMessage());
+            return back()->with('error', 'حدث خطأ تقني أثناء إضافة المؤسسة.');
+        }
+    }
 }

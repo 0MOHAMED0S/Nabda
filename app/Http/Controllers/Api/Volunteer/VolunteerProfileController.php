@@ -56,7 +56,7 @@ class VolunteerProfileController extends Controller
     /**
      * API: عرض بيانات الملف الشخصي للمتطوع الحالي
      */
-/**
+    /**
      * API: عرض بيانات الملف الشخصي للمتطوع الحالي (مع الروابط الكاملة)
      */
     public function show(Request $request): JsonResponse
@@ -105,7 +105,6 @@ class VolunteerProfileController extends Controller
                 'message' => 'تم جلب بيانات الملف الشخصي بنجاح.',
                 'data'    => $volunteer
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Volunteer Profile Show Error: " . $e->getMessage());
             return response()->json([
@@ -118,7 +117,7 @@ class VolunteerProfileController extends Controller
     /**
      * API: تحديث بيانات الملف الشخصي للمتطوع بصرامة
      */
-public function update(Request $request): \Illuminate\Http\JsonResponse
+    public function update(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $volunteer = $request->user();
@@ -177,7 +176,6 @@ public function update(Request $request): \Illuminate\Http\JsonResponse
                 'message' => 'تم تحديث البيانات بنجاح.',
                 'data'    => $volunteer
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Volunteer Update Error: " . $e->getMessage());
             return response()->json([

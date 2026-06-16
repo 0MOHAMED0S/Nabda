@@ -101,10 +101,10 @@ class UserAuthController extends Controller
     /**
      * API: تسجيل الدخول (ذكي: يدعم الإيميل أو رقم الهاتف)
      */
-    public function login(Request $request): \Illuminate\Http\JsonResponse
+    public function login(Request $request): JsonResponse
     {
         // 1. التحقق من المدخلات (البريد الإلكتروني وكلمة المرور فقط)
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'email'    => 'required|email',
             'password' => 'required|string',
         ], [
@@ -126,7 +126,7 @@ class UserAuthController extends Controller
             $email = strtolower(trim($request->email));
 
             // 3. البحث عن المستخدم بالبريد الإلكتروني فقط
-            $user = \App\Models\User::where('email', $email)->first();
+            $user = User::where('email', $email)->first();
 
             // 4. التحقق الأمني (تجنب الـ Timing Attacks)
             if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {

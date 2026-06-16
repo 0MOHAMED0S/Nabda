@@ -36,4 +36,12 @@ class User extends Authenticatable
             'charity_interests' => 'array', // 🎯 السحر هنا: يحول الـ JSON في الداتابيز لمصفوفة برمجية والعكس تلقائياً
         ];
     }
+
+    /**
+     * علاقة المستخدم مع تبرعاته
+     */
+    public function donations()
+    {
+        return $this->hasMany(\App\Models\Donation::class, 'user_id');
+    }
 }

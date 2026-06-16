@@ -4,11 +4,13 @@
 @section('content')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="{
     loading: false,
+    createModal: false,
     editModal: false,
     viewModal: false,
     deleteModal: false,
     search: '',
 
+    itemToCreate: { volunteer_type: '{{ old('volunteer_type', 'general') }}' },
     itemToEdit: {},
     itemToDelete: '',
     previewItem: {},
@@ -19,6 +21,11 @@
             @if ($current)
                 this.openEditModal(@js($current));
             @endif
+        @endif
+
+        // 🎯 فتح مودال الإضافة تلقائياً إذا كان هناك أخطاء في التحقق عند إضافة متطوع جديد
+        @if ($errors->any() && session('form_type') === 'create')
+            this.createModal = true;
         @endif
     },
 
@@ -34,7 +41,7 @@
 }">
 
     <div class="mb-10">
-        <div class="flex flex-col justify-between items-start gap-4 mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div>
                 <h2 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
                     المتطوعون المعتمدون
@@ -42,6 +49,10 @@
                 </h2>
                 <div class="h-1.5 bg-emerald-500 w-16 mt-3 rounded-full"></div>
             </div>
+
+            <button @click="createModal = true" class="bg-brand-600 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-brand-500/20 hover:bg-brand-700 transition-all flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> إضافة متطوع
+            </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-right">
@@ -168,6 +179,101 @@
 
     <template x-teleport="body">
         <div>
+            <div x-show="createModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+                <div @click.away="!loading && (createModal = false)" x-transition class="bg-white dark:bg-dark-800 w-full max-w-4xl rounded-[3rem] shadow-2xl p-8 md:p-10 border border-slate-100 dark:border-slate-700 transform transition-all text-right overflow-y-auto max-h-[90vh]">
+                    <div class="flex justify-between items-center mb-8 border-b border-slate-100 dark:border-slate-700/50 pb-6">
+                        <h3 class="text-2xl font-black text-slate-800 dark:text-white">إضافة متطوع جديد</h3>
+                        <button type="button" @click="createModal = false" :disabled="loading" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-2xl"></i></button>
+                    </div>
+
+                    <form action="{{ route('admin.volunteers.store') }}" method="POST" enctype="multipart/form-data" @submit="loading = true">
+                        @csrf
+                        <input type="hidden" name="form_type" value="create">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            <div class="md:col-span-2 p-6 bg-slate-50 dark:bg-dark-900 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-6">
+                                <div class="flex-1 space-y-2">
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">نوع التطوع <span class="text-rose-500">*</span></label>
+                                    <select name="volunteer_type" x-model="itemToCreate.volunteer_type" required
+                                        class="w-full px-6 py-4 rounded-2xl border-2 bg-white dark:bg-dark-800 border-slate-200 dark:border-slate-600 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                                        <option value="general">تطوع عام للجميع</option>
+                                        <option value="affiliated">تطوع تابع لمؤسسة محددة</option>
+                                    </select>
+                                </div>
+
+                                <div class="flex-1 space-y-2" x-show="itemToCreate.volunteer_type === 'affiliated'" x-transition>
+                                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">معرف المؤسسة (ID) <span class="text-rose-500">*</span></label>
+                                    <input type="number" name="foundation_id" value="{{ old('foundation_id') }}" placeholder="أدخل رقم الـ ID للمؤسسة"
+                                        class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-dark-800 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                                </div>
+                            </div>
+
+                            <div class="space-y-2 mt-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">الاسم الكامل <span class="text-rose-500">*</span></label>
+                                <input type="text" name="name" value="{{ old('name') }}" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                            </div>
+
+                            <div class="space-y-2 mt-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">الرقم القومي <span class="text-rose-500">*</span></label>
+                                <input type="text" name="national_id" value="{{ old('national_id') }}" required maxlength="14" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">البريد الإلكتروني <span class="text-rose-500">*</span></label>
+                                <input type="email" name="email" value="{{ old('email') }}" dir="ltr" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">رقم الهاتف <span class="text-rose-500">*</span></label>
+                                <input type="text" name="phone" value="{{ old('phone') }}" dir="ltr" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                            </div>
+
+                            <div class="md:col-span-2 space-y-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">العنوان السكني <span class="text-rose-500">*</span></label>
+                                <input type="text" name="address" value="{{ old('address') }}" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500">
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">كلمة المرور <span class="text-rose-500">*</span></label>
+                                <input type="password" name="password" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500" dir="ltr">
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mr-1">تأكيد كلمة المرور <span class="text-rose-500">*</span></label>
+                                <input type="password" name="password_confirmation" required class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-dark-900 outline-none font-bold transition-all text-sm h-[60px] focus:border-brand-500" dir="ltr">
+                            </div>
+
+                            <div class="md:col-span-2 mt-4 p-6 bg-slate-50/50 dark:bg-dark-900/50 rounded-3xl border border-slate-200 dark:border-slate-700">
+                                <h4 class="text-sm font-black text-slate-800 dark:text-white mb-4">هوية المتطوع والمرفقات</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-bold text-slate-500">صورة شخصية (اختياري)</label>
+                                        <input type="file" name="avatar" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-bold text-slate-500">صورة البطاقة (الوجه الأمامي) <span class="text-rose-500">*</span></label>
+                                        <input type="file" name="national_id_front" accept="image/*" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-bold text-slate-500">صورة البطاقة (الوجه الخلفي) <span class="text-rose-500">*</span></label>
+                                        <input type="file" name="national_id_back" accept="image/*" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 mt-10 pt-8 border-t border-slate-100 dark:border-slate-700/50">
+                            <button type="submit" :disabled="loading" class="flex-1 bg-brand-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-brand-500/20 hover:bg-brand-700 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed">
+                                <template x-if="loading"><i class="fa-solid fa-circle-notch animate-spin"></i></template>
+                                <span x-text="loading ? 'جاري الإنشاء...' : 'حفظ واعتماد المتطوع'"></span>
+                            </button>
+                            <button type="button" @click="createModal = false" :disabled="loading" class="px-10 bg-slate-100 dark:bg-dark-700 text-slate-500 rounded-2xl font-black hover:bg-slate-200 dark:hover:bg-dark-600 transition-all disabled:opacity-70">إلغاء</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div x-show="viewModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
                 <div @click.away="viewModal = false" x-transition class="bg-white dark:bg-dark-800 w-full max-w-5xl rounded-[3rem] shadow-2xl p-8 md:p-10 border border-slate-100 dark:border-slate-700 transform transition-all text-right overflow-y-auto max-h-[90vh]">
                     <div class="flex justify-between items-center mb-8 border-b border-slate-100 dark:border-slate-700/50 pb-6">
@@ -239,7 +345,7 @@
             <div x-show="editModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
                 <div @click.away="!loading && (editModal = false)" x-transition class="bg-white dark:bg-dark-800 w-full max-w-4xl rounded-[3rem] shadow-2xl p-8 md:p-10 border border-slate-100 dark:border-slate-700 transform transition-all text-right overflow-y-auto max-h-[90vh]">
                     <div class="flex justify-between items-center mb-8 border-b border-slate-100 dark:border-slate-700/50 pb-6">
-                        <h3 class="text-2xl font-black text-slate-800 dark:text-white">تعديل بيانات المتطوع המعتمد</h3>
+                        <h3 class="text-2xl font-black text-slate-800 dark:text-white">تعديل بيانات المتطوع المعتمد</h3>
                         <button type="button" @click="editModal = false" :disabled="loading" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-2xl"></i></button>
                     </div>
 
