@@ -117,19 +117,27 @@ class VolunteerProfileController extends Controller
     /**
      * API: تحديث بيانات الملف الشخصي للمتطوع بصرامة
      */
-public function update(Request $request): \Illuminate\Http\JsonResponse
+    public function update(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $volunteer = $request->user();
 
             // 1. قواعد التحقق الذكية (Smart Validation)
             $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-                'name'           => 'sometimes|required|string|min:3|max:255',
-                'phone'          => 'sometimes|required|string|max:20|unique:users,phone,' . $volunteer->id,
+                'name'             => 'sometimes|required|string|min:3|max:255',
+                'email'            => 'sometimes|required|email|max:255|unique:users,email,' . $volunteer->id,
+                'phone'            => 'sometimes|required|string|max:20|unique:users,phone,' . $volunteer->id,
+                'address'          => 'sometimes|nullable|string|max:500',
+
+                // 🎯 التحقق من المصفوفات (المحافظات والمجالات)
+                'governorates'     => 'sometimes|array',
+                'governorates.*'   => 'string',
+                'volunteer_fields' => 'sometimes|array',
+                'volunteer_fields.*' => 'string',
 
                 // 🎯 التحقق من نوع التطوع والمؤسسة
-                'volunteer_type' => 'sometimes|required|in:general,affiliated',
-                'foundation_id'  => [
+                'volunteer_type'   => 'sometimes|required|in:general,affiliated',
+                'foundation_id'    => [
                     'required_if:volunteer_type,affiliated', // مطلوب إجبارياً إذا كان تابعاً
                     'prohibited_if:volunteer_type,general',  // ممنوع إرساله تماماً إذا كان عام
                     'nullable',
@@ -137,7 +145,7 @@ public function update(Request $request): \Illuminate\Http\JsonResponse
                 ],
 
                 // 🎯 إضافة التحقق من الصورة
-                'avatar'         => 'sometimes|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'avatar'           => 'sometimes|image|mimes:jpeg,png,jpg,webp|max:5120',
             ], [
                 'foundation_id.required_if'   => 'يرجى اختيار المؤسسة التابع لها.',
                 'foundation_id.prohibited_if' => 'لا يمكنك اختيار مؤسسة لأن نوع التطوع "عام".',
@@ -153,9 +161,19 @@ public function update(Request $request): \Illuminate\Http\JsonResponse
                 ], 422, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. تحديث البيانات الأساسية
+            // 2. تحديث البيانات الأساسية (بما فيها البيانات الجديدة)
             if ($request->has('name')) $volunteer->name = $request->name;
+            if ($request->has('email')) $volunteer->email = $request->email;
             if ($request->has('phone')) $volunteer->phone = $request->phone;
+            if ($request->has('address')) $volunteer->address = $request->address;
+
+            // تحديث المصفوفات (يفضل أن يكون الحقل في الـ Model من نوع array أو json عبر الـ Casts)
+            if ($request->has('governorates')) {
+                $volunteer->governorates = $request->governorates;
+            }
+            if ($request->has('volunteer_fields')) {
+                $volunteer->volunteer_fields = $request->volunteer_fields;
+            }
 
             // 3. 🎯 المعالجة الذكية لنوع التطوع والمؤسسة
             if ($request->has('volunteer_type')) {
@@ -183,7 +201,7 @@ public function update(Request $request): \Illuminate\Http\JsonResponse
 
             $volunteer->save();
 
-            // تجهيز رابط الصورة الكامل في الاستجابة (اختياري لسهولة عرضها في الفرونت إند)
+            // تجهيز رابط الصورة الكامل في الاستجابة
             if ($volunteer->avatar) {
                 $volunteer->avatar_url = filter_var($volunteer->avatar, FILTER_VALIDATE_URL)
                     ? $volunteer->avatar

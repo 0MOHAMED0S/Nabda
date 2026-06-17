@@ -169,13 +169,7 @@
 
                 @php
                     $navItems = [
-                        // -------- الإشعارات --------
-                        [
-                            'is_group' => false,
-                            'route' => 'admin.notifications.index',
-                            'icon' => 'fa-bell',
-                            'label' => 'إشعارات النظام',
-                        ],
+                        // -------- القسم الأول: الأساسيات --------
                         [
                             'is_group' => false,
                             'route' => 'admin.dashboard',
@@ -184,11 +178,70 @@
                         ],
                         [
                             'is_group' => false,
+                            'route' => 'admin.notifications.index',
+                            'icon' => 'fa-bell',
+                            'label' => 'إشعارات النظام',
+                        ],
+                        [
+                            'is_group' => false,
                             'route' => 'admin.profile',
                             'icon' => 'fa-user-circle',
                             'label' => 'إعدادات الحساب',
                         ],
 
+                        // -------- القسم الثاني: الأعضاء والمجتمع --------
+                        [
+                            'is_group' => true,
+                            'label' => 'إدارة المؤسسات',
+                            'icon' => 'fa-building-columns',
+                            'active_routes' => ['admin.foundations.index', 'admin.foundations.approved'],
+                            'children' => [
+                                ['route' => 'admin.foundations.index', 'label' => 'طلبات التسجيل والمراجعة'],
+                                ['route' => 'admin.foundations.approved', 'label' => 'المؤسسات المعتمدة'],
+                            ],
+                        ],
+                        [
+                            'is_group' => true,
+                            'label' => 'إدارة المتطوعين',
+                            'icon' => 'fa-handshake-angle',
+                            'active_routes' => ['admin.volunteers.index', 'admin.volunteers.approve'],
+                            'children' => [
+                                ['route' => 'admin.volunteers.index', 'label' => 'طلبات التطوع والمراجعة'],
+                                ['route' => 'admin.volunteers.approve', 'label' => 'المتطوعون المعتمدون'],
+                            ],
+                        ],
+                        [
+                            'is_group' => false,
+                            'route' => 'admin.users.index',
+                            'icon' => 'fa-users-gear',
+                            'label' => 'إدارة المستخدمين',
+                        ],
+
+                        // -------- القسم الثالث: العمليات والأنشطة (أهم قسم تشغيلي) --------
+                        [
+                            'is_group' => true,
+                            'label' => 'المشاريع والخدمات',
+                            'icon' => 'fa-hand-holding-heart',
+                            'active_routes' => ['admin.categories.index', 'admin.services.index'],
+                            'children' => [
+                                ['route' => 'admin.categories.index', 'label' => 'تصنيفات الخدمات'],
+                                ['route' => 'admin.services.index', 'label' => 'قائمة الخدمات'],
+                            ],
+                        ],
+                        [
+                            'is_group' => false,
+                            'route' => 'admin.cases.index',
+                            'icon' => 'fa-briefcase-medical',
+                            'label' => 'متابعة حالات المؤسسات',
+                        ],
+                        [
+                            'is_group' => false,
+                            'route' => 'admin.opportunities.index',
+                            'icon' => 'fa-hands-holding-circle',
+                            'label' => 'الفرص التطوعية',
+                        ],
+
+                        // -------- القسم الرابع: الواجهة والمحتوى --------
                         [
                             'is_group' => true,
                             'label' => 'محتوى الواجهة',
@@ -199,7 +252,6 @@
                                 ['route' => 'admin.tickers.index', 'label' => 'الشريط الإخباري'],
                             ],
                         ],
-
                         [
                             'is_group' => true,
                             'label' => 'عن المنصة',
@@ -221,55 +273,14 @@
                                 ['route' => 'admin.team.index', 'label' => 'فريق العمل'],
                             ],
                         ],
-
-                        // -------- إدارة المؤسسات --------
-                        [
-                            'is_group' => true,
-                            'label' => 'إدارة المؤسسات',
-                            'icon' => 'fa-building-columns',
-                            'active_routes' => ['admin.foundations.index', 'admin.foundations.approved'],
-                            'children' => [
-                                ['route' => 'admin.foundations.index', 'label' => 'طلبات التسجيل والمراجعة'],
-                                ['route' => 'admin.foundations.approved', 'label' => 'المؤسسات المعتمدة'],
-                            ],
-                        ],
-// -------- إدارة المستخدمين (الجديدة) --------
-                        [
-                            'is_group' => false,
-                            'route' => 'admin.users.index',
-                            'icon' => 'fa-users-gear', // أيقونة تعبر عن إدارة المستخدمين
-                            'label' => 'إدارة المستخدمين',
-                        ],
-                        // -------- المجموعة الجديدة: إدارة المتطوعين --------
-                        [
-                            'is_group' => true,
-                            'label' => 'إدارة المتطوعين',
-                            'icon' => 'fa-handshake-angle', // أيقونة تعبر عن التطوع والمساعدة
-                            'active_routes' => ['admin.volunteers.index', 'admin.volunteers.approve'],
-                            'children' => [
-                                ['route' => 'admin.volunteers.index', 'label' => 'طلبات التطوع والمراجعة'],
-                                ['route' => 'admin.volunteers.approve', 'label' => 'المتطوعون المعتمدون'],
-                            ],
-                        ],
-                        // ---------------------------------------------------
-
-                        [
-                            'is_group' => true,
-                            'label' => 'المشاريع والخدمات',
-                            'icon' => 'fa-hand-holding-heart',
-                            'active_routes' => ['admin.categories.index', 'admin.services.index'],
-                            'children' => [
-                                ['route' => 'admin.categories.index', 'label' => 'تصنيفات الخدمات'],
-                                ['route' => 'admin.services.index', 'label' => 'قائمة الخدمات'],
-                            ],
-                        ],
-
                         [
                             'is_group' => false,
                             'route' => 'admin.articles.index',
                             'icon' => 'fa-newspaper',
                             'label' => 'المركز الإعلامي',
                         ],
+
+                        // -------- القسم الخامس: الإعدادات والتواصل --------
                         [
                             'is_group' => false,
                             'route' => 'admin.zakat.index',
@@ -282,7 +293,6 @@
                             'icon' => 'fa-question-circle',
                             'label' => 'الأسئلة الشائعة',
                         ],
-
                         [
                             'is_group' => true,
                             'label' => 'بيانات التواصل',
@@ -298,10 +308,8 @@
                                 ['route' => 'admin.reviews.index', 'label' => 'آراء المبدعين'],
                             ],
                         ],
-
                     ];
                 @endphp
-
                 @foreach ($navItems as $item)
                     @if ($item['is_group'])
                         @php $isGroupActive = in_array(request()->route()->getName(), $item['active_routes']); @endphp

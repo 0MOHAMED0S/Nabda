@@ -116,11 +116,19 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
                     $data['primary_field'] = 'عام';
                 }
 
+                // 🎯 استخراج المحافظة الأساسية للسهولة في العرض (اختياري، يسهل على الفرونت إند)
+                if (isset($data['governorates']) && is_array($data['governorates']) && count($data['governorates']) > 0) {
+                    $data['primary_governorate'] = $data['governorates'][0];
+                } else {
+                    $data['primary_governorate'] = 'غير محدد';
+                }
+
                 // 5. ترجمة الحالة لتلوين الـ Badge في الفرونت إند
                 $data['status_ar'] = 'نشط';
 
+                // 🎯 التعديل هنا: قمنا بإزالة $data['governorates'] من دالة unset لكي يتم إرجاعها في الاستجابة (Response)
                 // تنظيف المصفوفة من البيانات الكبيرة غير المستخدمة في الجدول
-                unset($data['volunteer_fields'], $data['governorates'], $data['national_id_front'], $data['national_id_back']);
+                unset($data['volunteer_fields'], $data['national_id_front'], $data['national_id_back']);
 
                 return $data;
             });
@@ -139,7 +147,6 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             return response()->json(['status' => false, 'message' => 'حدث خطأ تقني أثناء جلب البيانات.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-
     /**
      * API: تبديل حالة المتطوع (تنشيط / إيقاف) - للزر الموجود في عمود الإجراءات
      */
@@ -175,16 +182,14 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
     /**
      * API: عرض الملف الشخصي التفصيلي لمتطوع محدد (بدون Pagination)
      */
-/**
-     * API: عرض الملف الشخصي التفصيلي لمتطوع محدد (بدون Pagination)
-     */
-    public function show(Request $request, $id): JsonResponse
+
+public function show(Request $request, $id): \Illuminate\Http\JsonResponse
     {
         try {
             $foundationId = $request->user()->id;
 
             // 1. جلب بيانات المتطوع الأساسية
-            $volunteer = Volunteer::find($id);
+            $volunteer = \App\Models\Volunteer::find($id);
 
             if (!$volunteer) {
                 return response()->json([
@@ -194,7 +199,7 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             }
 
             // 2. جلب كافة التقارير المعتمدة للمتطوع (الأنشطة السابقة التي تم تقييمها)
-            $approvedReports = VolunteerReport::where('volunteer_id', $id)
+            $approvedReports = \App\Models\VolunteerReport::where('volunteer_id', $id)
                 ->where('status', 'approved')
                 ->with(['opportunity:id,title,foundation_id,date', 'opportunity.foundation:id,name'])
                 ->orderBy('created_at', 'desc')
@@ -205,7 +210,7 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             // ==========================================
             $totalHours = $approvedReports->sum('hours');
 
-            // 🎯 التعديل هنا: حساب إجمالي عدد الأنشطة التي تم قبوله فيها أو حضرها (سواء رفع تقرير أم لا)
+            // حساب إجمالي عدد الأنشطة التي تم قبوله فيها أو حضرها (سواء رفع تقرير أم لا)
             $activitiesCount = $volunteer->opportunities()
                                          ->whereIn('opportunity_volunteer.status', ['accepted', 'attended'])
                                          ->count();
@@ -213,7 +218,7 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             $avgHours = $activitiesCount > 0 ? round($totalHours / $activitiesCount, 1) : 0;
 
             $lastActivity = $approvedReports->first();
-            $lastActivityDate = $lastActivity ? Carbon::parse($lastActivity->created_at)->format('Y/m/d') : 'لم يشارك بعد';
+            $lastActivityDate = $lastActivity ? \Carbon\Carbon::parse($lastActivity->created_at)->format('Y/m/d') : 'لم يشارك بعد';
 
             // حساب التقييمات
             $ratedReports = $approvedReports->whereNotNull('rating');
@@ -242,7 +247,7 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
                     'id'              => $report->id,
                     'activity_name'   => $report->opportunity->title ?? 'غير محدد',
                     'foundation_name' => $report->opportunity->foundation->name ?? 'غير محدد',
-                    'date'            => Carbon::parse($report->created_at)->format('Y/m/d'),
+                    'date'            => \Carbon\Carbon::parse($report->created_at)->format('Y/m/d'),
                     'hours'           => $report->hours,
                     'rating'          => $report->rating,
                     'feedback'        => $report->feedback_message,
@@ -257,10 +262,13 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
                 ? asset('storage/' . $volunteer->avatar)
                 : ($volunteer->avatar ?? null);
 
-            // استخراج العنوان (المحافظة)
-            $address = 'غير محدد';
-            if (isset($volunteer->governorates) && is_array($volunteer->governorates) && count($volunteer->governorates) > 0) {
-                $address = implode(' - ', $volunteer->governorates);
+            // 🎯 التعديل هنا: جلب العنوان الفعلي من قاعدة البيانات
+            $address = $volunteer->address ?? 'غير محدد';
+
+            // 🎯 التعديل هنا: جلب المحافظات وإرجاعها كمصفوفة
+            $governorates = $volunteer->governorates ?? [];
+            if (!is_array($governorates)) {
+                $governorates = json_decode($governorates, true) ?? [];
             }
 
             // استخراج مجالات التطوع (كالمهارات: تدريس، تواصل، صبر...)
@@ -274,20 +282,21 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
             // ==========================================
             $responseData = [
                 'personal_info' => [
-                    'id'         => $volunteer->id,
-                    'name'       => $volunteer->name,
-                    'avatar_url' => $avatarUrl,
-                    'email'      => $volunteer->email,
-                    'phone'      => $volunteer->phone,
-                    'address'    => $address,
-                    'join_date'  => Carbon::parse($volunteer->created_at)->translatedFormat('Y/m/d'),
-                    'status'     => $volunteer->status,
-                    'status_ar'  => $volunteer->status === 'active' ? 'نشط' : 'موقوف',
-                    'fields'     => $fields,
+                    'id'           => $volunteer->id,
+                    'name'         => $volunteer->name,
+                    'avatar_url'   => $avatarUrl,
+                    'email'        => $volunteer->email,
+                    'phone'        => $volunteer->phone,
+                    'address'      => $address,      // 👈 تم تصحيح العنوان
+                    'governorates' => $governorates, // 👈 تمت إضافة المحافظات
+                    'join_date'    => \Carbon\Carbon::parse($volunteer->created_at)->translatedFormat('Y/m/d'),
+                    'status'       => $volunteer->status,
+                    'status_ar'    => $volunteer->status === 'active' ? 'نشط' : 'موقوف',
+                    'fields'       => $fields,
                 ],
                 'quick_stats' => [
                     'total_hours'      => $totalHours,
-                    'activities_count' => $activitiesCount, // 👈 سيعرض الآن إجمالي عدد الأنشطة الفعلي
+                    'activities_count' => $activitiesCount,
                     'average_hours'    => $avgHours,
                     'last_activity'    => $lastActivityDate,
                 ],
@@ -305,8 +314,8 @@ public function index(Request $request): \Illuminate\Http\JsonResponse
                 'data'    => $responseData
             ], 200, [], JSON_UNESCAPED_UNICODE);
 
-        } catch (Exception $e) {
-            Log::error("API Foundation Volunteer Profile Error: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("API Foundation Volunteer Profile Error: " . $e->getMessage());
             return response()->json([
                 'status'  => false,
                 'message' => 'حدث خطأ تقني أثناء جلب بيانات المتطوع.'

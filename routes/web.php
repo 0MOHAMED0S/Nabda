@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\Contacts\ContactInfoController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\Foundation\FoundationController;
+use App\Http\Controllers\Admin\FoundationCaseController;
 use App\Http\Controllers\Admin\hero\HeroController;
 use App\Http\Controllers\Admin\hero\TickerController;
 use App\Http\Controllers\Admin\Rate\ReviewController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Admin\User\UserController;
 use App\Http\Controllers\Admin\ZakatConditionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Volunteer\VolunteerController;
+use App\Http\Controllers\Admin\VolunteerOpportunityController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -113,5 +115,8 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
     Route::post('/notifications/mark-all-as-read', [AdminNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
     Route::put('/notifications/{id}/mark-as-read', [AdminNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
     Route::delete('/notifications/{id}', [AdminNotificationController::class, 'destroy'])->name('notifications.destroy');
+
+    Route::get('/cases', [FoundationCaseController::class, 'index'])->name('cases.index');
+    Route::get('/opportunities', [VolunteerOpportunityController::class, 'index'])->name('opportunities.index');
     });
 });
