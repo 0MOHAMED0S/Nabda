@@ -33,7 +33,7 @@ public function index(Request $request)
                 }
             ])
             ->orderBy('created_at', 'desc')
-            ->paginate(15)
+            ->paginate(10)
             ->withQueryString(); // 🎯 إضافة هذا السطر تضمن عمل الترقيم بشكل سليم حتى لو كان هناك بحث أو فلاتر في الرابط
 
             $stats = [
