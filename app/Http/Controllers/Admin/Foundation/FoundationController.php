@@ -141,27 +141,54 @@ class FoundationController extends Controller
         }
     }
 
-    /**
-     * عرض قائمة المؤسسات المعتمدة فقط (المقبولة)
+/**
+     * عرض قائمة المؤسسات المعتمدة فقط (المقبولة) مع إحصائيات نشاطها
      */
     public function approvedIndex()
     {
         try {
-            // جلب المؤسسات المعتمدة فقط
-            $foundations = Foundation::where('approval_status', 'approved')
+            // جلب المؤسسات المعتمدة مع إحصائيات تفصيلية (نشاط المؤسسة)
+            $foundations = \App\Models\Foundation::where('approval_status', 'approved')
+                ->withCount([
+                    // 1. عدد الحالات النشطة التابعة للمؤسسة
+                    'cases as active_cases_count' => function ($query) {
+                        $query->where('status', 'active');
+                    },
+                    // 2. إجمالي عدد الحالات (كل الحالات)
+                    'cases as total_cases_count',
+
+                    // 3. عدد الفرص التطوعية المتاحة حالياً
+                    'opportunities as active_opportunities_count' => function ($query) {
+                        $query->where('status', 'open');
+                    },
+
+                    // 4. عدد عمليات التبرع المكتملة لصالح هذه المؤسسة
+                    'donations as completed_donations_count' => function ($query) {
+                        $query->where('status', 'completed');
+                    }
+                ])
+                ->withSum([
+                    // 5. إجمالي المبالغ المالية التي تم جمعها لهذه المؤسسة
+                    'donations as total_collected_amount' => function ($query) {
+                        $query->where('status', 'completed')
+                              ->where('donation_type', 'financial');
+                    }
+                ], 'amount')
                 ->orderBy('updated_at', 'desc')
                 ->paginate(15);
 
+            // الإحصائيات العلوية الخاصة بالصفحة
             $stats = [
-                'total_approved' => Foundation::where('approval_status', 'approved')->count(),
-                'active'         => Foundation::where('approval_status', 'approved')->where('status', 'active')->count(),
-                'inactive'       => Foundation::where('approval_status', 'approved')->where('status', 'inactive')->count(),
+                'total_approved' => \App\Models\Foundation::where('approval_status', 'approved')->count(),
+                'active'         => \App\Models\Foundation::where('approval_status', 'approved')->where('status', 'active')->count(),
+                'inactive'       => \App\Models\Foundation::where('approval_status', 'approved')->where('status', 'inactive')->count(),
             ];
 
             return view('admin.foundations.approve', compact('foundations', 'stats'));
-        } catch (Exception $e) {
-            Log::error("Foundation Approved Index Error: " . $e->getMessage());
-            return back()->with('error', 'حدث خطأ أثناء جلب بيانات المؤسسات المعتمدة.');
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Foundation Approved Index Error: " . $e->getMessage());
+            return back()->with('error', 'حدث خطأ تقني أثناء جلب بيانات المؤسسات المعتمدة.');
         }
     }
 

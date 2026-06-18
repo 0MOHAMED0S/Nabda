@@ -36,7 +36,7 @@ class VolunteerController extends Controller
         }
     }
 
-    /**
+/**
      * تحديث بيانات المتطوع وحالة الاعتماد
      */
     public function update(Request $request, Volunteer $volunteer)
@@ -47,43 +47,59 @@ class VolunteerController extends Controller
                 'email'          => 'required|email|max:255|unique:volunteers,email,' . $volunteer->id,
                 'phone'          => 'required|string|max:20|unique:volunteers,phone,' . $volunteer->id,
                 'national_id'    => 'required|string|size:14|unique:volunteers,national_id,' . $volunteer->id,
+
+                // 🎯 التحقق من نوع التطوع والمؤسسة
                 'volunteer_type' => 'required|in:general,affiliated',
+                'foundation_id'  => 'required_if:volunteer_type,affiliated|nullable|exists:foundations,id',
+
                 'status'         => 'required|in:pending,approved,rejected', // حالة مراجعة الإدارة
                 'address'        => 'required|string|max:500',
             ], [
-                'name.required'        => 'اسم المتطوع مطلوب.',
-                'email.unique'         => 'هذا البريد الإلكتروني مستخدم مسبقاً.',
-                'phone.unique'         => 'هذا الهاتف مستخدم مسبقاً.',
-                'national_id.unique'   => 'الرقم القومي مستخدم مسبقاً.',
-                'national_id.size'     => 'الرقم القومي يجب أن يتكون من 14 رقماً.',
-                'status.in'            => 'حالة الحساب غير صالحة.',
-                'volunteer_type.in'    => 'نوع التطوع غير صالح.',
+                'name.required'             => 'اسم المتطوع مطلوب.',
+                'email.unique'              => 'هذا البريد الإلكتروني مستخدم مسبقاً.',
+                'phone.unique'              => 'هذا الهاتف مستخدم مسبقاً.',
+                'national_id.unique'        => 'الرقم القومي مستخدم مسبقاً.',
+                'national_id.size'          => 'الرقم القومي يجب أن يتكون من 14 رقماً.',
+                'status.in'                 => 'حالة الحساب غير صالحة.',
+                'volunteer_type.in'         => 'نوع التطوع غير صالح.',
+
+                // 🎯 رسائل الخطأ المخصصة للمؤسسة
+                'foundation_id.required_if' => 'يرجى اختيار المؤسسة بما أن نوع التطوع "تابع لمؤسسة".',
+                'foundation_id.exists'      => 'المؤسسة المختارة غير موجودة.',
             ]);
-        } catch (ValidationException $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             // إرجاع edit_id لكي يفتح الـ Modal الخاص بالتعديل تلقائياً في الفرونت إند
             return back()->withErrors($e->validator)->withInput()->with('edit_id', $volunteer->id);
         }
 
         try {
-            $volunteer->update($request->only([
-                'name',
-                'email',
-                'phone',
-                'national_id',
-                'volunteer_type',
-                'status',
-                'address'
-            ]));
+            // 🎯 تجهيز مصفوفة البيانات للتحديث
+            $dataToUpdate = $request->only([
+                'name', 'email', 'phone', 'national_id',
+                'volunteer_type', 'status', 'address'
+            ]);
 
-            // 🎯 إضافة إرسال الإيميل في الخلفية
+            // 🎯 المعالجة الذكية لـ foundation_id
+            if ($request->volunteer_type === 'general') {
+                // إذا كان التطوع عاماً، نقوم بمسح رقم المؤسسة (في حال تم تغيير نوعه من تابع إلى عام)
+                $dataToUpdate['foundation_id'] = null;
+            } else {
+                // إذا كان تابعاً، نحفظ رقم المؤسسة المختارة
+                $dataToUpdate['foundation_id'] = $request->foundation_id;
+            }
+
+            // تنفيذ التحديث
+            $volunteer->update($dataToUpdate);
+
+            // إضافة إرسال الإيميل في الخلفية
             // نتحقق أولاً مما إذا كانت حالة التطوع (status) قد تغيرت في هذا التعديل
             if ($volunteer->wasChanged('status') && !empty($volunteer->email)) {
-                Mail::to($volunteer->email)->send(new VolunteerStatusUpdated($volunteer));
+                \Illuminate\Support\Facades\Mail::to($volunteer->email)->send(new \App\Mail\VolunteerStatusUpdated($volunteer));
             }
 
             return back()->with('success', 'تم تحديث بيانات وحالة المتطوع بنجاح.');
-        } catch (Exception $e) {
-            Log::error("Volunteer Update Error ID {$volunteer->id}: " . $e->getMessage());
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Volunteer Update Error ID {$volunteer->id}: " . $e->getMessage());
             return back()->with('error', 'حدث خطأ أثناء تحديث بيانات المتطوع.');
         }
     }
@@ -140,28 +156,51 @@ class VolunteerController extends Controller
         }
     }
 
-    /**
-     * عرض قائمة المتطوعين المعتمدين فقط (المقبولين)
+/**
+     * عرض قائمة المتطوعين المعتمدين فقط (المقبولين) مع إحصائيات أدائهم
      */
     public function approvedIndex()
     {
         try {
-            // جلب المتطوعين المقبولين فقط
-            $volunteers = Volunteer::where('status', 'approved')
+            // 1. جلب المتطوعين المقبولين فقط مع إحصائيات الإنجاز والتأثير
+            $volunteers = \App\Models\Volunteer::where('status', 'approved')
+                ->withCount([
+                    // عدد الأنشطة أو الفرص التطوعية التي تم قبوله فيها أو حضرها
+                    'opportunities as activities_count' => function ($query) {
+                        $query->whereIn('opportunity_volunteer.status', ['accepted', 'attended']);
+                    },
+                    // عدد التقارير التطوعية المعتمدة التي رفعها
+                    'reports as approved_reports_count' => function ($query) {
+                        $query->where('status', 'approved');
+                    }
+                ])
+                ->withSum([
+                    // حساب إجمالي الساعات التطوعية (من التقارير المعتمدة فقط)
+                    'reports as total_hours' => function ($query) {
+                        $query->where('status', 'approved');
+                    }
+                ], 'hours')
                 ->orderBy('updated_at', 'desc')
                 ->paginate(15);
 
-            // إحصائيات خاصة بالمعتمدين
+            // 2. إحصائيات خاصة بالمعتمدين (للكروت العلوية في الصفحة)
             $stats = [
-                'total_approved' => Volunteer::where('status', 'approved')->count(),
-                'general'        => Volunteer::where('status', 'approved')->where('volunteer_type', 'general')->count(),
-                'affiliated'     => Volunteer::where('status', 'approved')->where('volunteer_type', 'affiliated')->count(),
+                'total_approved' => \App\Models\Volunteer::where('status', 'approved')->count(),
+                'general'        => \App\Models\Volunteer::where('status', 'approved')->where('volunteer_type', 'general')->count(),
+                'affiliated'     => \App\Models\Volunteer::where('status', 'approved')->where('volunteer_type', 'affiliated')->count(),
             ];
 
-            return view('admin.volunteers.approve', compact('volunteers', 'stats'));
-        } catch (Exception $e) {
-            Log::error("Volunteer Approved Index Error: " . $e->getMessage());
-            return back()->with('error', 'حدث خطأ أثناء جلب بيانات المتطوعين المعتمدين.');
+            // 3. 🎯 التعديل هنا: جلب المؤسسات المعتمدة والنشطة لاستخدامها في قوائم الـ Modals
+            $foundations = \App\Models\Foundation::where('approval_status', 'approved')
+                ->where('status', 'active')
+                ->get(['id', 'name']); // جلب الـ ID والاسم فقط لتحسين الأداء
+
+            // 4. تمرير المتغيرات الثلاثة إلى الواجهة
+            return view('admin.volunteers.approve', compact('volunteers', 'stats', 'foundations'));
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Volunteer Approved Index Error: " . $e->getMessage());
+            return back()->with('error', 'حدث خطأ تقني أثناء جلب بيانات المتطوعين المعتمدين.');
         }
     }
 

@@ -9,10 +9,12 @@ use App\Http\Controllers\Admin\aboutUs\TeamController;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\Articles\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\Contacts\BranchController;
 
 use App\Http\Controllers\Admin\Contacts\ContactInfoController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DonationController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\Foundation\FoundationController;
 use App\Http\Controllers\Admin\FoundationCaseController;
@@ -27,9 +29,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Volunteer\VolunteerController;
 use App\Http\Controllers\Admin\VolunteerOpportunityController;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Route::get('/', function () {
+//     return view('welcome');
+// });
 
 Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
 
@@ -118,5 +120,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 
     Route::get('/cases', [FoundationCaseController::class, 'index'])->name('cases.index');
     Route::get('/opportunities', [VolunteerOpportunityController::class, 'index'])->name('opportunities.index');
+
+    Route::get('/donations', [DonationController::class, 'index'])->name('donations.index');
+Route::put('/donations/{donation}/status', [DonationController::class, 'updateStatus'])->name('donations.updateStatus');
+
+
+// مسارات رسائل اتصل بنا
+    Route::get('/messages', [ContactMessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/{message}', [ContactMessageController::class, 'show'])->name('messages.show');
+    Route::post('/messages/{message}/reply', [ContactMessageController::class, 'reply'])->name('messages.reply');
+    Route::delete('/messages/{message}', [ContactMessageController::class, 'destroy'])->name('messages.destroy');
     });
 });

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Contacts\ContactController;
 use App\Http\Controllers\Api\AboutUs\AboutUsController;
 use App\Http\Controllers\Api\Article\ArticleController;
+use App\Http\Controllers\Api\ContactMessageController;
 use App\Http\Controllers\Api\Faq\FaqController;
 use App\Http\Controllers\Api\Foundation\CaseUpdateController;
 use App\Http\Controllers\Api\Foundation\FoundationAuthController;
@@ -43,6 +44,8 @@ use App\Http\Controllers\Api\Public\PlatformStatisticsController;
 
 // 🎯 جلب إحصائيات المنصة العامة (للرئيسية)
 Route::get('/statistics', [PlatformStatisticsController::class, 'index']);
+
+Route::post('/contact-us', [ContactMessageController::class, 'store']);
 
 //reviews
 Route::get('/reviews', [ReviewController::class, 'index']);

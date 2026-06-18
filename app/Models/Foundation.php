@@ -80,4 +80,12 @@ protected $fillable = [
     {
         return $this->hasMany(FoundationCase::class);
     }
+    public function opportunities()
+    {
+        return $this->hasMany(VolunteerOpportunity::class, 'foundation_id');
+    }
+    public function donations()
+    {
+        return $this->hasMany(Donation::class, 'foundation_id');
+    }
 }
