@@ -14,11 +14,12 @@ class CategoryController extends Controller
     /**
      * عرض قائمة الأقسام
      */
-    public function index()
+public function index()
     {
         try {
-            // جلب الأقسام من الأحدث للأقدم
-            $categories = Category::latest()->get();
+            // 🎯 جلب الأقسام من الأحدث للأقدم مع الترقيم (15 قسم في كل صفحة)
+            $categories = Category::latest()->paginate(15)->withQueryString();
+
             return view('admin.service.categories.index', compact('categories'));
 
         } catch (Exception $e) {

@@ -25,7 +25,7 @@
                     إدارة الأقسام
                     <span
                         class="bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-sm py-1 px-3 rounded-xl font-bold">
-                        {{ $categories->count() }} أقسام
+                        {{ $categories->total() }} أقسام
                     </span>
                 </h2>
                 <div class="h-1.5 bg-brand-600 w-16 mt-3 rounded-full"></div>
@@ -145,6 +145,13 @@
                     <p class="text-slate-500 font-medium">لم يتم العثور على نتائج مطابقة لبحثك.</p>
                 </div>
             </div>
+
+            @if ($categories->hasPages())
+                <div class="p-6 md:p-8 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/20 dark:bg-dark-900/10 flex justify-center">
+                    {{ $categories->links() }}
+                </div>
+            @endif
+
         </div>
 
         <template x-teleport="body">
