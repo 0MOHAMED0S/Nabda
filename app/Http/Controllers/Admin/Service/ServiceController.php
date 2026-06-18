@@ -16,11 +16,11 @@ class ServiceController extends Controller
     /**
      * عرض قائمة الخدمات
      */
-    public function index()
+public function index()
     {
         try {
-            // جلب الخدمات مع الأقسام (Eager Loading) وتمرير الأقسام للـ Select Box
-            $services = Service::with('category')->latest()->get();
+            // جلب الخدمات مع الأقسام (Eager Loading) مع الترقيم وتمرير الأقسام للـ Select Box
+            $services = Service::with('category')->latest()->paginate(15)->withQueryString();
             $categories = Category::all();
 
             return view('admin.service.services.index', compact('services', 'categories'));

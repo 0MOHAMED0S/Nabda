@@ -43,7 +43,7 @@
         <h2 class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
             الخدمات والحملات
             <span class="bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-sm py-1 px-3 rounded-xl font-bold">
-                {{ $services->count() }} خدمة
+                {{ $services->total() }} خدمة
             </span>
         </h2>
         <div class="h-1.5 bg-brand-600 w-16 mt-3 rounded-full"></div>
@@ -178,6 +178,12 @@
                 <p class="text-slate-500 font-medium">لم يتم العثور على خدمة مطابقة للبحث.</p>
             </div>
         </div>
+
+        @if ($services->hasPages())
+            <div class="p-6 md:p-8 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/20 dark:bg-dark-900/10 flex justify-center">
+                {{ $services->links() }}
+            </div>
+        @endif
     </div>
 
     <template x-teleport="body">
