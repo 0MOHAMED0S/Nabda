@@ -158,7 +158,7 @@
         </div>
 
         @if ($users->hasPages())
-            <div class="p-8 border-t border-slate-50 dark:border-slate-700/50 bg-slate-50/20 dark:bg-dark-900/10">
+            <div class="p-8 border-t border-slate-50 dark:border-slate-700/50 bg-slate-50/20 dark:bg-dark-900/10 flex justify-center">
                 {{ $users->links() }}
             </div>
         @endif
@@ -292,11 +292,11 @@
                         </div>
 
                         <div class="flex gap-4 mt-10 pt-8 border-t border-slate-100 dark:border-slate-700/50">
-                            <button type="submit" :disabled="loading" class="flex-1 bg-brand-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-brand-500/20 hover:bg-brand-700 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed">
+                            <button type="submit" :disabled="loading" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70">
                                 <template x-if="loading"><i class="fa-solid fa-circle-notch animate-spin"></i></template>
-                                <span x-text="loading ? 'جاري الحفظ...' : 'تحديث البيانات'"></span>
+                                <span x-text="loading ? 'جاري الحفظ...' : 'حفظ التحديثات'"></span>
                             </button>
-                            <button type="button" @click="editModal = false" :disabled="loading" class="px-10 bg-slate-100 dark:bg-dark-700 text-slate-500 rounded-2xl font-black hover:bg-slate-200 dark:hover:bg-dark-600 transition-all disabled:opacity-70">إلغاء</button>
+                            <button type="button" @click="editModal = false" :disabled="loading" class="px-8 bg-slate-100 dark:bg-dark-700 text-slate-500 rounded-2xl font-black hover:bg-slate-200 transition-all">إلغاء</button>
                         </div>
                     </form>
                 </div>

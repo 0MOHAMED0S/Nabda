@@ -17,7 +17,7 @@ class UserController extends Controller
     /**
      * عرض قائمة جميع المستخدمين مع الإحصائيات (التبرعات، الحالات، النقاط)
      */
-    public function index()
+public function index(Request $request)
     {
         try {
             // 🎯 جلب المستخدمين مع حساب عدد التبرعات المكتملة، وعدد الحالات الفريدة المدعومة
@@ -33,7 +33,8 @@ class UserController extends Controller
                 }
             ])
             ->orderBy('created_at', 'desc')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString(); // 🎯 إضافة هذا السطر تضمن عمل الترقيم بشكل سليم حتى لو كان هناك بحث أو فلاتر في الرابط
 
             $stats = [
                 'total' => User::count(),
