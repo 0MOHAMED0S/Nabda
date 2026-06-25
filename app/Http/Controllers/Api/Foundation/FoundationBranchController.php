@@ -11,9 +11,6 @@ use Exception;
 
 class FoundationBranchController extends Controller
 {
-    /**
-     * مصفوفة رسائل التحقق باللغة العربية
-     */
     private $validationMessages = [
         'name.required'        => 'اسم الفرع مطلوب ولا يمكن تركه فارغاً.',
         'name.string'          => 'يجب أن يكون اسم الفرع نصاً.',
@@ -33,9 +30,6 @@ class FoundationBranchController extends Controller
         'coordinates.string'   => 'الإحداثيات يجب أن تكون نصاً (مثال: 30.0444,31.2357).',
     ];
 
-    /**
-     * API: جلب جميع فروع المؤسسة الحالية
-     */
     public function index(Request $request)
     {
         try {
@@ -54,7 +48,6 @@ class FoundationBranchController extends Controller
                 'message' => 'تم جلب بيانات الفروع بنجاح.',
                 'data'    => $branches
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Branches Index Error: " . $e->getMessage());
             return response()->json([
@@ -64,9 +57,6 @@ class FoundationBranchController extends Controller
         }
     }
 
-    /**
-     * API: إضافة فرع جديد
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -86,9 +76,12 @@ class FoundationBranchController extends Controller
         }
 
         try {
-            // يتم إنشاء الفرع وربطه مباشرة بالمؤسسة صاحبة التوكن
             $branch = $request->user()->branches()->create($request->only([
-                'name', 'phone', 'address', 'email', 'coordinates'
+                'name',
+                'phone',
+                'address',
+                'email',
+                'coordinates'
             ]));
 
             return response()->json([
@@ -96,7 +89,6 @@ class FoundationBranchController extends Controller
                 'message' => 'تمت إضافة الفرع بنجاح.',
                 'data'    => $branch
             ], 201);
-
         } catch (Exception $e) {
             Log::error("API Foundation Branch Store Error: " . $e->getMessage());
             return response()->json([
@@ -106,9 +98,6 @@ class FoundationBranchController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل فرع محدد
-     */
     public function show(Request $request, $id)
     {
         try {
@@ -126,7 +115,6 @@ class FoundationBranchController extends Controller
                 'message' => 'تم جلب تفاصيل الفرع بنجاح.',
                 'data'    => $branch
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Branch Show Error: " . $e->getMessage());
             return response()->json([
@@ -136,12 +124,8 @@ class FoundationBranchController extends Controller
         }
     }
 
-    /**
-     * API: تعديل فرع موجود (يدعم التحديث الجزئي)
-     */
     public function update(Request $request, $id)
     {
-        // استخدام sometimes لدعم التحديث الجزئي (Partial Update)
         $validator = Validator::make($request->all(), [
             'name'        => 'sometimes|required|string|max:255',
             'phone'       => 'sometimes|required|string|max:50',
@@ -158,7 +142,6 @@ class FoundationBranchController extends Controller
             ], 422);
         }
 
-        // منع الطلبات الفارغة
         if (empty($request->all())) {
             return response()->json([
                 'status'  => false,
@@ -177,7 +160,11 @@ class FoundationBranchController extends Controller
             }
 
             $branch->update($request->only([
-                'name', 'phone', 'address', 'email', 'coordinates'
+                'name',
+                'phone',
+                'address',
+                'email',
+                'coordinates'
             ]));
 
             return response()->json([
@@ -185,7 +172,6 @@ class FoundationBranchController extends Controller
                 'message' => 'تم تحديث بيانات الفرع بنجاح.',
                 'data'    => $branch
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Branch Update Error: " . $e->getMessage());
             return response()->json([
@@ -195,9 +181,6 @@ class FoundationBranchController extends Controller
         }
     }
 
-    /**
-     * API: حذف فرع
-     */
     public function destroy(Request $request, $id)
     {
         try {
@@ -216,7 +199,6 @@ class FoundationBranchController extends Controller
                 'status'  => true,
                 'message' => 'تم حذف الفرع نهائياً بنجاح.'
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Branch Delete Error: " . $e->getMessage());
             return response()->json([

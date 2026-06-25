@@ -43,7 +43,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
     // Protected routes
     Route::middleware(['admin'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('profile', [AuthController::class, 'profile'])->name('profile');
         Route::put('profile/update', [AuthController::class, 'updateProfile'])->name('profile.update');
         Route::put('profile/password', [AuthController::class, 'updatePassword'])->name('profile.password');
@@ -97,7 +97,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
             Route::post('/foundations', [FoundationController::class, 'store'])->name('store');
         });
 
-        // ضع هذه الأسطر داخل الـ Route::group الخاص بلوحة تحكم الإدارة (Admin)
         Route::prefix('volunteers')->name('volunteers.')->group(function () {
             Route::get('/', [VolunteerController::class, 'index'])->name('index');
             Route::get('/approved', [VolunteerController::class, 'approvedIndex'])->name('approve'); // صفحة المعتمدين
@@ -108,27 +107,25 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
         });
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
-    Route::post('/users', [UserController::class, 'store'])->name('users.store');
-    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
-    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 
 
-    Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
-    Route::post('/notifications/mark-all-as-read', [AdminNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
-    Route::put('/notifications/{id}/mark-as-read', [AdminNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
-    Route::delete('/notifications/{id}', [AdminNotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
+        Route::post('/notifications/mark-all-as-read', [AdminNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+        Route::put('/notifications/{id}/mark-as-read', [AdminNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+        Route::delete('/notifications/{id}', [AdminNotificationController::class, 'destroy'])->name('notifications.destroy');
 
-    Route::get('/cases', [FoundationCaseController::class, 'index'])->name('cases.index');
-    Route::get('/opportunities', [VolunteerOpportunityController::class, 'index'])->name('opportunities.index');
+        Route::get('/cases', [FoundationCaseController::class, 'index'])->name('cases.index');
+        Route::get('/opportunities', [VolunteerOpportunityController::class, 'index'])->name('opportunities.index');
 
-    Route::get('/donations', [DonationController::class, 'index'])->name('donations.index');
-Route::put('/donations/{donation}/status', [DonationController::class, 'updateStatus'])->name('donations.updateStatus');
+        Route::get('/donations', [DonationController::class, 'index'])->name('donations.index');
+        Route::put('/donations/{donation}/status', [DonationController::class, 'updateStatus'])->name('donations.updateStatus');
 
-
-// مسارات رسائل اتصل بنا
-    Route::get('/messages', [ContactMessageController::class, 'index'])->name('messages.index');
-    Route::get('/messages/{message}', [ContactMessageController::class, 'show'])->name('messages.show');
-    Route::post('/messages/{message}/reply', [ContactMessageController::class, 'reply'])->name('messages.reply');
-    Route::delete('/messages/{message}', [ContactMessageController::class, 'destroy'])->name('messages.destroy');
+        Route::get('/messages', [ContactMessageController::class, 'index'])->name('messages.index');
+        Route::get('/messages/{message}', [ContactMessageController::class, 'show'])->name('messages.show');
+        Route::post('/messages/{message}/reply', [ContactMessageController::class, 'reply'])->name('messages.reply');
+        Route::delete('/messages/{message}', [ContactMessageController::class, 'destroy'])->name('messages.destroy');
     });
 });

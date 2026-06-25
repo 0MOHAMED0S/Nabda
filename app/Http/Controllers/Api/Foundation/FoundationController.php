@@ -8,16 +8,13 @@ use App\Models\FoundationCase;
 use App\Models\Service;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Carbon\Carbon; // 🎯 ضروري جداً لحساب التواريخ والأيام المتبقية
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class FoundationController extends Controller
 {
-    /**
-     * API: جلب جميع المؤسسات المعتمدة والنشطة (العرض المختصر للقائمة)
-     */
     public function index()
     {
         try {
@@ -84,10 +81,7 @@ class FoundationController extends Controller
         }
     }
 
-    /**
-     * API: جلب كافة تفاصيل مؤسسة واحدة معتمدة (العرض الشامل للبروفايل)
-     */
-public function show($id): JsonResponse
+    public function show($id): JsonResponse
     {
         try {
             // 1. جلب المؤسسة مع العلاقات المباشرة (الفريق، الأسئلة الشائعة، الأهداف، الفروع)
@@ -223,10 +217,7 @@ public function show($id): JsonResponse
         }
     }
 
-    /**
-     * API: جلب جميع الحالات النشطة التابعة لمؤسسة معينة (مخصص لقائمة الحالات داخل بروفايل المؤسسة)
-     */
-public function getFoundationCases(Request $request, $id): JsonResponse
+    public function getFoundationCases(Request $request, $id): JsonResponse
     {
         try {
             // 1. التأكد من وجود المؤسسة واعتمادها
@@ -309,7 +300,6 @@ public function getFoundationCases(Request $request, $id): JsonResponse
                 'message' => 'تم جلب الحالات بنجاح.',
                 'data'    => $cases
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Get Foundation Cases Error: " . $e->getMessage());
             return response()->json([
@@ -318,10 +308,8 @@ public function getFoundationCases(Request $request, $id): JsonResponse
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-    /**
-     * API: جلب التفاصيل الكاملة لحالة واحدة بعينها (لصفحة التبرع للحالة - الصور والمستندات والقصة)
-     */
-public function getCaseDetails($caseId): JsonResponse
+
+    public function getCaseDetails($caseId): JsonResponse
     {
         try {
             // 1. استعلام فائق السرعة يجلب الحالة، المؤسسة، التحديثات، إجماليات التبرعات، والخدمة وتصنيفها
@@ -464,11 +452,7 @@ public function getCaseDetails($caseId): JsonResponse
         }
     }
 
-
-/**
-     * API: جلب خدمات / حملات المؤسسة (بدون شريط التقدم المالي - لتبويب الخدمات) - بدون Pagination
-     */
-public function getFoundationServices(Request $request, $id): \Illuminate\Http\JsonResponse
+    public function getFoundationServices(Request $request, $id): \Illuminate\Http\JsonResponse
     {
         try {
             // 1. التأكد من وجود المؤسسة واعتمادها
@@ -495,7 +479,7 @@ public function getFoundationServices(Request $request, $id): \Illuminate\Http\J
                 // 🎯 إضافة حساب عدد الحالات النشطة التابعة لهذه المؤسسة وهذه الخدمة
                 ->withCount(['foundationCases as cases_count' => function ($query) use ($id) {
                     $query->where('foundation_id', $id)
-                          ->where('status', 'active');
+                        ->where('status', 'active');
                 }])
                 ->orderBy('created_at', 'desc')
                 ->get(); // بدون Pagination
@@ -525,7 +509,6 @@ public function getFoundationServices(Request $request, $id): \Illuminate\Http\J
                 'message' => 'تم جلب الخدمات بنجاح.',
                 'data'    => $services
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Get Foundation Services Error: " . $e->getMessage());
             return response()->json([
@@ -536,10 +519,9 @@ public function getFoundationServices(Request $request, $id): \Illuminate\Http\J
         }
     }
 
-public function getContactDetails(Request $request, $id): JsonResponse
+    public function getContactDetails(Request $request, $id): JsonResponse
     {
         try {
-            // 1. جلب المؤسسة مع فروعها
             $foundation = Foundation::with('branches')
                 ->where('status', 'active')
                 ->where('approval_status', 'approved')
@@ -553,15 +535,11 @@ public function getContactDetails(Request $request, $id): JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. تهيئة بيانات الفروع (معالجة حقل coordinates)
             $branches = $foundation->branches->map(function ($branch) {
-
-                // 🎯 فصل حقل الإحداثيات إلى خط عرض وطول
                 $lat = null;
                 $lng = null;
 
                 if (!empty($branch->coordinates)) {
-                    // افتراض أن الإحداثيات محفوظة مفصولة بفاصلة مثل: "30.0444,31.2357"
                     $coords = explode(',', $branch->coordinates);
                     if (count($coords) >= 2) {
                         $lat = trim($coords[0]);
@@ -574,18 +552,12 @@ public function getContactDetails(Request $request, $id): JsonResponse
                     'name'      => $branch->name, // مثال: فرع القاهرة
                     'address'   => $branch->address,
                     'phone'     => $branch->phone,
-                    'email'     => $branch->email, // 🎯 أضفنا الإيميل لأنه موجود في الموديل لديك
-
-                    // إحداثيات الخريطة (Leaflet / OpenStreetMap)
+                    'email'     => $branch->email,
                     'latitude'  => $lat,
                     'longitude' => $lng,
-
-                    // نرسل الحقل الأصلي احتياطياً
                     'coordinates' => $branch->coordinates
                 ];
             });
-
-            // 3. هيكلة الرد ليتطابق مع كروت الشاشة (Cards)
             $data = [
                 'contact_info' => [
                     'phone'         => $foundation->phone ?? 'غير متوفر',
@@ -600,7 +572,6 @@ public function getContactDetails(Request $request, $id): JsonResponse
                 'message' => 'تم جلب معلومات الاتصال بنجاح.',
                 'data'    => $data
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Get Foundation Contact Details Error: " . $e->getMessage());
             return response()->json([
@@ -609,13 +580,9 @@ public function getContactDetails(Request $request, $id): JsonResponse
             ], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
-    /**
-     * API: جلب جميع الحالات المرتبطة بخدمة معينة داخل مؤسسة محددة
-     */
     public function getFoundationServiceCases(Request $request, $foundationId, $serviceId): JsonResponse
     {
         try {
-            // 1. التأكد من وجود المؤسسة واعتمادها
             $foundation = Foundation::where('status', 'active')->where('approval_status', 'approved')->find($foundationId);
 
             if (!$foundation) {
@@ -626,7 +593,6 @@ public function getContactDetails(Request $request, $id): JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. جلب الحالات المطابقة لشرطي المؤسسة والخدمة معاً
             $cases = FoundationCase::with(['foundation:id,name,logo', 'service.category'])
                 ->where('foundation_id', $foundationId)
                 ->where('service_id', $serviceId) // 🎯 فلترة إضافية برقم الخدمة
@@ -638,17 +604,14 @@ public function getContactDetails(Request $request, $id): JsonResponse
                 ->orderBy('created_at', 'desc')
                 ->get(); // بدون Pagination (يمكنك استخدام paginate إن كانت الحالات كثيرة جداً)
 
-            // 3. تهيئة البيانات وتنسيقها للواجهة (Frontend)
             $cases->transform(function ($case) {
                 $collected  = $case->collected_amount ?? 0;
                 $target     = $case->target_amount;
 
-                // حساب النسبة المئوية
                 $percentage = ($case->goal_type === 'financial' && $target > 0)
                     ? min(100, round(($collected / $target) * 100))
                     : 0;
 
-                // استخراج رابط الصورة الكامل بأمان
                 $firstImage = (is_array($case->images) && count($case->images) > 0) ? $case->images[0] : null;
                 $imageUrl = !empty($firstImage) && !\Illuminate\Support\Str::startsWith($firstImage, ['http://', 'https://'])
                     ? asset('storage/' . $firstImage)
@@ -658,10 +621,8 @@ public function getContactDetails(Request $request, $id): JsonResponse
                     ? asset('storage/' . $case->foundation->logo)
                     : ($case->foundation->logo ?? null);
 
-                // تحديد ما إذا كانت الحالة عاجلة
                 $isUrgent = in_array(strtolower($case->priority), ['urgent', 'عاجل', 'high', 'عالية']);
 
-                // استخراج بيانات الخدمة والتصنيف بأمان
                 $serviceCategory = ($case->service && $case->service->category) ? $case->service->category->name : 'غير مصنف';
                 $serviceTitle    = $case->service ? $case->service->title : 'خدمة عامة';
 
@@ -675,17 +636,13 @@ public function getContactDetails(Request $request, $id): JsonResponse
                     'category'              => $serviceCategory,
                     'service_name'          => $serviceTitle,
 
-                    // شارات وتنسيقات جاهزة للطباعة
                     'is_urgent'             => $isUrgent,
                     'urgency_badge'         => $isUrgent ? 'عاجلة' : 'غير عاجلة',
                     'currency'              => 'جنيه',
 
-                    // الأرقام لشرائط التقدم
                     'target_amount'         => $target,
                     'collected_amount'      => $collected,
                     'completion_percentage' => $percentage,
-
-                    // الصور والمؤسسة
                     'image_url'             => $imageUrl,
                     'foundation_name'       => $case->foundation->name ?? '',
                     'foundation_logo_url'   => $logoUrl,
@@ -697,7 +654,6 @@ public function getContactDetails(Request $request, $id): JsonResponse
                 'message' => 'تم جلب حالات الخدمة التابعة للمؤسسة بنجاح.',
                 'data'    => $cases
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Get Foundation Service Cases Error: " . $e->getMessage());
             return response()->json([

@@ -12,27 +12,21 @@ use Carbon\Carbon;
 
 class FoundationMessageController extends Controller
 {
-    /**
-     * جلب رسائل المؤسسة مع الإحصائيات העلوية (للجدول الرئيسي)
-     */
-public function index(Request $request): JsonResponse
+
+    public function index(Request $request): JsonResponse
     {
         try {
-            // 🎯 السطر الذي كان يسبب المشكلة تم حله!
             $foundationId = $request->user()->id;
 
             $query = FoundationMessage::where('foundation_id', $foundationId);
-
-            // 1. الإحصائيات
             $totalMessages  = (clone $query)->count();
             $unreadMessages = (clone $query)->where('is_read', false)->count();
             $readMessages   = (clone $query)->where('is_read', true)->count();
 
-            // 2. الفلترة
             if ($request->filled('search')) {
-                $query->where(function($q) use ($request) {
+                $query->where(function ($q) use ($request) {
                     $q->where('name', 'like', "%{$request->search}%")
-                      ->orWhere('email', 'like', "%{$request->search}%");
+                        ->orWhere('email', 'like', "%{$request->search}%");
                 });
             }
             if ($request->filled('subject') && $request->subject !== 'الكل') {
@@ -43,10 +37,7 @@ public function index(Request $request): JsonResponse
                 if ($request->status === 'unread') $query->where('is_read', false);
             }
 
-            // 3. جلب البيانات (بدون Pagination)
             $messages = $query->orderBy('created_at', 'desc')->get();
-
-            // تطبيق التنسيق مباشرة على الـ Collection
             $messages->transform(function ($msg) {
                 return [
                     'id'         => $msg->id,
@@ -72,17 +63,13 @@ public function index(Request $request): JsonResponse
                     'messages' => $messages
                 ]
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Foundation Messages Index Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'خطأ في السيرفر'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
-    /**
-     * عرض تفاصيل رسالة واحدة مع الرد (لفتح المودال)
-     */
-public function show(Request $request, $id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
         try {
             // 🎯 التعديل هنا: استخدام id بدلاً من foundation_id
@@ -111,16 +98,12 @@ public function show(Request $request, $id): JsonResponse
                     'replied_at'    => $message->replied_at ? \Carbon\Carbon::parse($message->replied_at)->format('Y-m-d') : null,
                 ]
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => 'الرسالة غير موجودة.'], 404);
         }
     }
 
-    /**
-     * الرد على الرسالة (حفظ وإرسال إيميل)
-     */
-public function reply(Request $request, $id): JsonResponse
+    public function reply(Request $request, $id): JsonResponse
     {
         $request->validate([
             'reply_subject' => 'required|string|max:255',
@@ -128,12 +111,9 @@ public function reply(Request $request, $id): JsonResponse
         ]);
 
         try {
-            // 🎯 التعديل هنا: استخدام id بدلاً من foundation_id
             $foundationId = $request->user()->id;
 
             $message = FoundationMessage::with('foundation')->where('foundation_id', $foundationId)->findOrFail($id);
-
-            // إرسال الإيميل في الخلفية
             if (!empty($message->email)) {
                 Mail::to($message->email)->send(new FoundationMessageReply(
                     $request->reply_subject,
@@ -142,7 +122,6 @@ public function reply(Request $request, $id): JsonResponse
                 ));
             }
 
-            // حفظ نص الرد في قاعدة البيانات وتحديث الحالة
             $message->update([
                 'reply_subject' => $request->reply_subject,
                 'reply_body'    => $request->reply_body,
@@ -155,25 +134,17 @@ public function reply(Request $request, $id): JsonResponse
                 'message' => 'تم حفظ الرد وإرساله للمستخدم بنجاح.',
                 'data'    => $message
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Foundation Reply Error ID {$id}: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء الإرسال.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
-    /**
-     * تحديد كمقروءة / غير مقروءة من أيقونة العين السريعة
-     */
-public function toggleRead(Request $request, $id): JsonResponse
+    public function toggleRead(Request $request, $id): JsonResponse
     {
         try {
-            // 🎯 التعديل الأول: استخدام id الخاص بحساب المؤسسة المسجل
             $foundationId = $request->user()->id;
-
             $message = FoundationMessage::where('foundation_id', $foundationId)->findOrFail($id);
-
-            // 🎯 التعديل الثاني: نجعلها مقروءة فقط (إذا لم تكن كذلك مسبقاً)
             if (!$message->is_read) {
                 $message->update(['is_read' => true]);
             }
@@ -182,7 +153,6 @@ public function toggleRead(Request $request, $id): JsonResponse
                 'status'  => true,
                 'message' => 'تم تحديد الرسالة كمقروءة بنجاح.'
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Mark Message as Read Error ID {$id}: " . $e->getMessage());
             return response()->json([
@@ -192,25 +162,16 @@ public function toggleRead(Request $request, $id): JsonResponse
         }
     }
 
-    /**
-     * حذف رسالة
-     */
-public function destroy(Request $request, $id): JsonResponse
+    public function destroy(Request $request, $id): JsonResponse
     {
         try {
-            // 🎯 التعديل: استخدام id الخاص بحساب المؤسسة المسجل
             $foundationId = $request->user()->id;
-
             $message = FoundationMessage::where('foundation_id', $foundationId)->findOrFail($id);
-
-            // هذا الأمر يحذف السجل بالكامل (الرسالة + الردود المحفوظة بداخلها)
             $message->delete();
-
             return response()->json([
                 'status'  => true,
                 'message' => 'تم حذف الرسالة وردودها بنجاح.'
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Delete Message Error ID {$id}: " . $e->getMessage());
             return response()->json([

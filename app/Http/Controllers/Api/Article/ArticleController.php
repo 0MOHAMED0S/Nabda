@@ -11,24 +11,15 @@ use Exception;
 
 class ArticleController extends Controller
 {
-    /**
-     * API: جلب قائمة المقالات والأخبار (مع إمكانية الفلترة بالنوع)
-     */
     public function index(Request $request)
     {
         try {
-            // 1. تحسين الأداء: تحديد الحقول المطلوبة فقط من قاعدة البيانات
             $query = Article::select('id', 'type', 'main_title', 'second_title', 'description', 'published_date', 'image');
-
-            // 2. فلترة ذكية: إذا أرسل الـ Frontend نوع معين (?type=news أو ?type=article)
             if ($request->has('type') && in_array($request->type, ['article', 'news'])) {
                 $query->where('type', $request->type);
             }
-
-            // 3. الترتيب وجلب البيانات
             $articles = $query->orderBy('published_date', 'desc')->get();
 
-            // 4. تصحيح معايير RESTful: إرجاع 200 مع مصفوفة فارغة بدلاً من 404
             if ($articles->isEmpty()) {
                 return response()->json([
                     'status'  => true,
@@ -37,7 +28,6 @@ class ArticleController extends Controller
                 ], 200);
             }
 
-            // 5. إعادة تشكيل البيانات لتهيئة الروابط والتاريخ والوصف المختصر
             $data = $articles->map(function ($article) {
                 return [
                     'id'             => $article->id,
@@ -45,7 +35,6 @@ class ArticleController extends Controller
                     'main_title'     => $article->main_title,
                     'second_title'   => $article->second_title,
                     'short_desc'     => Str::limit($article->description, 100),
-                    // برمجة دفاعية: التأكد من وجود تاريخ لتجنب الـ Null Exception
                     'published_date' => $article->published_date ? $article->published_date->format('Y-m-d') : null,
                     'image_url'      => $article->image ? asset('storage/' . $article->image) : null,
                 ];
@@ -56,7 +45,6 @@ class ArticleController extends Controller
                 'message' => 'تم جلب القائمة بنجاح.',
                 'data'    => $data,
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API Articles Index Error: ' . $e->getMessage());
 
@@ -68,18 +56,12 @@ class ArticleController extends Controller
         }
     }
 
-    /**
-     * API: جلب تفاصيل مقال أو خبر معين بواسطة الـ ID
-     */
     public function show($id)
     {
         try {
-            // 1. الأداء: جلب الحقول المطلوبة للمقال المُراد فقط
             $article = Article::select('id', 'type', 'main_title', 'second_title', 'description', 'published_date', 'image')
                 ->where('id', $id)
                 ->first();
-
-            // 2. التحقق من وجود المقال (هنا نستخدم 404 لأننا نبحث عن شيء محدد)
             if (!$article) {
                 return response()->json([
                     'status'  => false,
@@ -87,8 +69,6 @@ class ArticleController extends Controller
                     'data'    => null
                 ], 404);
             }
-
-            // 3. تجهيز بيانات المقال بالكامل
             $data = [
                 'id'             => $article->id,
                 'type'           => $article->type,
@@ -104,7 +84,6 @@ class ArticleController extends Controller
                 'message' => 'تم جلب تفاصيل المحتوى بنجاح.',
                 'data'    => $data
             ], 200);
-
         } catch (Exception $e) {
             Log::error('API Articles Show Error (ID ' . $id . '): ' . $e->getMessage());
 

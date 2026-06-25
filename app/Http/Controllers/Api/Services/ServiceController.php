@@ -13,16 +13,10 @@ use Illuminate\Http\Request;
 
 class ServiceController extends Controller
 {
-    /**
-     * جلب جميع الأقسام
-     */
     public function index()
     {
         try {
-            // 1. تحسين الأداء: جلب الحقول المطلوبة فقط وإلغاء الحاجة لدالة map()
             $categories = Category::select('id', 'name')->get();
-
-            // 2. تطبيق معايير RESTful: الاستجابة بـ 200 ومصفوفة فارغة عند عدم وجود بيانات
             if ($categories->isEmpty()) {
                 return response()->json([
                     'status'  => true,
@@ -30,15 +24,12 @@ class ServiceController extends Controller
                     'data'    => []
                 ], 200);
             }
-
-            // 3. حالة النجاح
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب الأقسام بنجاح.',
                 'data'    => $categories
             ], 200);
         } catch (Exception $e) {
-            // 4. تسجيل الخطأ الفني في السيرفر أمنياً
             Log::error('API Categories Index Error: ' . $e->getMessage());
 
             return response()->json([
@@ -49,23 +40,15 @@ class ServiceController extends Controller
         }
     }
 
-    /**
-     * جلب جميع الخدمات مباشرة
-     */
-public function allServices()
+    public function allServices()
     {
         try {
-            // 1. تحسين الأداء العالي:
-            // - select: نجلب حقول الخدمة المطلوبة فقط. (يجب أن تكون قبل withCount لتجنب الكتابة فوق الحقل المضاف)
-            // - with('category:id,name'): نجلب حقلي الـ id والـ name فقط من جدول الأقسام المرتبط لتخفيف الحمل.
-            // - withCount: 🎯 نجلب عدد الحالات المرتبطة بالخدمة بكفاءة عالية.
             $services = Service::select('id', 'title', 'description', 'image', 'category_id', 'created_at')
                 ->with('category:id,name')
                 ->withCount('foundationCases') // 🎯 إضافة عداد الحالات
                 ->latest()
                 ->get();
 
-            // 2. التحقق من القائمة الفارغة
             if ($services->isEmpty()) {
                 return response()->json([
                     'status'  => true,
@@ -74,7 +57,6 @@ public function allServices()
                 ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 3. إعادة التشكيل (Mapping) لتنسيق رابط الصورة واستخراج اسم القسم
             $data = $services->map(function ($service) {
                 return [
                     'id'            => $service->id,
@@ -101,13 +83,9 @@ public function allServices()
         }
     }
 
-    /**
-     * API: جلب جميع الحالات التابعة لخدمة معينة (بناءً على service_id)
-     */
     public function getServiceCases(Request $request, $serviceId): JsonResponse
     {
         try {
-            // 1. التأكد من وجود الخدمة المطلوبة وجلب تفاصيلها مع تصنيفها لعنوان الصفحة
             $service = \App\Models\Service::with('category')->find($serviceId);
 
             if (!$service) {
@@ -118,12 +96,10 @@ public function allServices()
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. جلب الحالات المرتبطة بهذه الخدمة (مع التأكد أن المؤسسة التابعة لها نشطة ومعتمدة)
             $cases = FoundationCase::with(['foundation:id,name,logo', 'service.category'])
                 ->where('service_id', $serviceId)
                 ->where('status', 'active')
                 ->whereHas('foundation', function ($q) {
-                    // شرط إضافي لضمان عدم جلب حالات لمؤسسات تم إيقافها
                     $q->where('status', 'active')->where('approval_status', 'approved');
                 })
                 ->withSum(['donations as collected_amount' => function ($query) {
@@ -133,17 +109,14 @@ public function allServices()
                 ->orderBy('created_at', 'desc')
                 ->get(); // جلب دفعة واحدة بدون Pagination
 
-            // 3. تهيئة البيانات وتنسيقها للواجهة (Frontend)
             $cases->transform(function ($case) {
                 $collected  = $case->collected_amount ?? 0;
                 $target     = $case->target_amount;
 
-                // حساب النسبة المئوية
                 $percentage = ($case->goal_type === 'financial' && $target > 0)
                     ? min(100, round(($collected / $target) * 100))
                     : 0;
 
-                // استخراج رابط الصورة الكامل بأمان
                 $firstImage = (is_array($case->images) && count($case->images) > 0) ? $case->images[0] : null;
                 $imageUrl = !empty($firstImage) && !str_starts_with($firstImage, 'http')
                     ? asset('storage/' . $firstImage)
@@ -153,10 +126,8 @@ public function allServices()
                     ? asset('storage/' . $case->foundation->logo)
                     : ($case->foundation->logo ?? null);
 
-                // تحديد ما إذا كانت الحالة عاجلة
                 $isUrgent = in_array(strtolower($case->priority), ['urgent', 'عاجل', 'high', 'عالية']);
 
-                // استخراج بيانات الخدمة والتصنيف بأمان
                 $serviceCategory = ($case->service && $case->service->category) ? $case->service->category->name : 'غير مصنف';
                 $serviceTitle    = $case->service ? $case->service->title : 'خدمة عامة';
 
@@ -165,23 +136,19 @@ public function allServices()
                     'title'                 => $case->title,
                     'short_description'     => \Illuminate\Support\Str::limit($case->main_description, 70, '...'),
 
-                    // 🎯 الحقول المطلوبة للخدمة والتصنيف داخل كل حالة
                     'service_id'            => $case->service_id,
                     'service_name'          => $serviceTitle,
                     'category_name'         => $serviceCategory,
                     'category'              => $serviceCategory, // تركتها أيضاً لعدم كسر أي كود قديم في الفرونت إند
 
-                    // شارات وتنسيقات جاهزة للطباعة
                     'is_urgent'             => $isUrgent,
                     'urgency_badge'         => $isUrgent ? 'عاجلة' : 'غير عاجلة',
                     'currency'              => 'جنيه',
 
-                    // الأرقام لشرائط التقدم
                     'target_amount'         => $target,
                     'collected_amount'      => $collected,
                     'completion_percentage' => $percentage,
 
-                    // الصور والمؤسسة
                     'image_url'             => $imageUrl,
                     'foundation_name'       => $case->foundation->name ?? '',
                     'foundation_logo_url'   => $logoUrl,
@@ -192,7 +159,6 @@ public function allServices()
                 'status'  => true,
                 'message' => 'تم جلب الحالات التابعة للخدمة بنجاح.',
 
-                // 🎯 إضافة معلومات الخدمة العامة لاستخدامها في عنوان الصفحة (Page Header)
                 'service_info' => [
                     'id'            => $service->id,
                     'name'          => $service->title,
@@ -210,11 +176,9 @@ public function allServices()
         }
     }
 
-public function show($id): \Illuminate\Http\JsonResponse
+    public function show($id): \Illuminate\Http\JsonResponse
     {
         try {
-            // 1. جلب الخدمة مع تصنيفها (Category)
-            // 🎯 ودمج استعلام عدد الحالات "النشطة" بكفاءة عالية في نفس الطلب
             $service = \App\Models\Service::with('category')
                 ->withCount(['foundationCases as active_cases_count' => function ($query) {
                     $query->where('status', 'active');
@@ -229,23 +193,19 @@ public function show($id): \Illuminate\Http\JsonResponse
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. استخراج رابط الصورة بأمان
             $imageUrl = !empty($service->image) && !\Illuminate\Support\Str::startsWith($service->image, ['http://', 'https://'])
                 ? asset('storage/' . $service->image)
                 : ($service->image ?? null);
 
-            // 3. تشكيل الاستجابة النهائية
             $data = [
                 'id'                 => $service->id,
                 'title'              => $service->title,
                 'description'        => $service->description,
                 'image_url'          => $imageUrl,
 
-                // بيانات التصنيف
                 'category_id'        => $service->category_id,
                 'category_name'      => $service->category->name ?? 'غير مصنف',
 
-                // إحصائيات وتواريخ
                 'active_cases_count' => $service->active_cases_count ?? 0, // 🎯 تم جلبها مباشرة من الاستعلام
                 'created_at'         => $service->created_at ? $service->created_at->format('Y-m-d') : null,
             ];

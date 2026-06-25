@@ -12,23 +12,15 @@ use Exception;
 
 class FoundationAuthController extends Controller
 {
-    /**
-     * API: تسجيل مؤسسة جديدة مع رفع المستندات
-     */
-/**
-     * API: تسجيل حساب مؤسسة جديد (طلب التحاق)
-     */
+
     public function register(Request $request)
     {
-        // 1. التحقق من المدخلات مع رسائل خطأ مفصلة باللغة العربية
         $validator = Validator::make($request->all(), [
-            // الخطوة 1
             'name'                  => 'required|string|max:255',
             'email'                 => 'required|string|email|max:255|unique:foundations',
             'phone'                 => 'required|string|max:20|unique:foundations',
             'type'                  => 'required|string|max:100',
 
-            // الخطوة 2 (ملفات)
             'license_number'        => 'required|string|max:255',
             'supervising_authority' => 'required|string|max:255',
             'license_image'         => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
@@ -36,12 +28,10 @@ class FoundationAuthController extends Controller
             'tax_card'              => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
             'accreditation_letter'  => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120',
 
-            // الخطوة 3 (صور وباسوورد)
             'headquarters_image'    => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
             'logo'                  => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
             'password'              => 'required|string|min:8|confirmed',
         ], [
-            // رسائل الخطوة 1
             'name.required'                  => 'اسم المؤسسة مطلوب.',
             'email.required'                 => 'البريد الإلكتروني مطلوب.',
             'email.email'                    => 'صيغة البريد الإلكتروني غير صحيحة.',
@@ -50,22 +40,18 @@ class FoundationAuthController extends Controller
             'phone.unique'                   => 'رقم الهاتف مسجل مسبقاً لدينا.',
             'type.required'                  => 'يرجى تحديد نوع المؤسسة.',
 
-            // رسائل الخطوة 2
             'license_number.required'        => 'رقم الترخيص الرسمي مطلوب.',
             'supervising_authority.required' => 'الجهة المشرفة مطلوبة.',
             'license_image.required'         => 'صورة الترخيص مطلوبة.',
             'commercial_register.required'   => 'صورة السجل التجاري مطلوبة.',
             'tax_card.required'              => 'صورة البطاقة الضريبية مطلوبة.',
             'accreditation_letter.required'  => 'خطاب الاعتماد الرسمي مطلوب.',
-
-            // رسائل الخطوة 3
             'headquarters_image.required'    => 'صورة مقر المؤسسة مطلوبة.',
             'logo.required'                  => 'لوجو المؤسسة مطلوب.',
             'password.required'              => 'كلمة المرور مطلوبة.',
             'password.min'                   => 'كلمة المرور يجب ألا تقل عن 8 رموز.',
             'password.confirmed'             => 'تأكيد كلمة المرور غير متطابق.',
 
-            // رسائل عامة للملفات
             '*.file'                         => 'الملف المرفق غير صالح.',
             '*.image'                        => 'الملف يجب أن يكون صورة صحيحة.',
             '*.mimes'                        => 'الصيغ المدعومة للملفات هي: jpeg, png, jpg, pdf.',
@@ -81,7 +67,6 @@ class FoundationAuthController extends Controller
         }
 
         try {
-            // 2. تخزين الملفات في مجلد storage/app/public/foundations
             $license_image         = $request->file('license_image')->store('foundations/documents', 'public');
             $commercial_register   = $request->file('commercial_register')->store('foundations/documents', 'public');
             $tax_card              = $request->file('tax_card')->store('foundations/documents', 'public');
@@ -89,7 +74,6 @@ class FoundationAuthController extends Controller
             $headquarters_image    = $request->file('headquarters_image')->store('foundations/images', 'public');
             $logo                  = $request->file('logo')->store('foundations/logos', 'public');
 
-            // 3. إنشاء حساب المؤسسة (طلب التحاق)
             $foundation = Foundation::create([
                 'name'                  => $request->name,
                 'email'                 => $request->email,
@@ -108,20 +92,15 @@ class FoundationAuthController extends Controller
                 'status'                => 'active',  // الحساب نشط كمستخدم، لكن ينتظر الاعتماد
             ]);
 
-            // 🎯 تم إزالة إصدار التوكن نهائياً من هنا
-
-            // 4. إرجاع استجابة تفيد بنجاح إرسال الطلب فقط
             return response()->json([
                 'status'  => true,
                 'message' => 'تم استلام طلب التسجيل بنجاح. يرجى الانتظار لحين مراجعة واعتماد الإدارة لبياناتكم، وسيتم إبلاغكم فور الموافقة لتتمكنوا من تسجيل الدخول.',
-                // يمكننا إرجاع بعض البيانات الأساسية لتأكيد العملية للفرونت إند (بدون باسوورد أو بيانات حساسة)
                 'data'    => [
                     'id'    => $foundation->id,
                     'name'  => $foundation->name,
                     'email' => $foundation->email,
                 ]
             ], 201);
-
         } catch (Exception $e) {
             Log::error("Foundation Registration API Error: " . $e->getMessage());
 
@@ -133,9 +112,6 @@ class FoundationAuthController extends Controller
         }
     }
 
-    /**
-     * API: تسجيل الدخول (Login) للمؤسسة
-     */
     public function login(Request $request)
     {
         // 1. التحقق من المدخلات
@@ -211,9 +187,6 @@ class FoundationAuthController extends Controller
         }
     }
 
-    /**
-     * API: تسجيل الخروج وإبطال التوكن
-     */
     public function logout(Request $request)
     {
         try {

@@ -16,18 +16,12 @@ use Illuminate\Support\Facades\DB;
 
 class FoundationDashboardController extends Controller
 {
-    /**
-     * API: جلب بيانات لوحة التحكم الرئيسية للمؤسسة (الإحصائيات، التنبيهات، والجداول الحديثة)
-     */
     public function index(Request $request): JsonResponse
     {
         try {
             $foundation = $request->user();
             $foundationId = $foundation->id;
 
-            // ==========================================
-            // 1. بيانات الترويسة (Header Info)
-            // ==========================================
             $reportsQuery = VolunteerReport::whereHas('opportunity', function ($q) use ($foundationId) {
                 $q->where('foundation_id', $foundationId);
             })->where('status', 'approved')->whereNotNull('rating');
@@ -43,9 +37,6 @@ class FoundationDashboardController extends Controller
                 'ratings_count'  => $ratingsCount,
             ];
 
-            // ==========================================
-            // 2. المربعات العلوية (الإحصائيات السريعة)
-            // ==========================================
             $totalDonations = Donation::where('foundation_id', $foundationId)->where('status', 'completed')->sum('amount');
             $donorsCount    = Donation::where('foundation_id', $foundationId)->distinct('user_id')->count('user_id');
 
@@ -65,24 +56,20 @@ class FoundationDashboardController extends Controller
                 'completed_cases'     => $completedCases,
             ];
 
-            // ==========================================
-            // 3. قسم "يحتاج انتباه" (Alerts)
-            // ==========================================
             $newVolunteerRequests = DB::table('opportunity_volunteer')->whereIn('volunteer_opportunity_id', $opportunitiesIds)->where('status', 'applied')->count();
             $pendingDonations     = Donation::where('foundation_id', $foundationId)->where('status', 'pending')->count();
 
-            // 🎯 التصحيح: جلب الحالات النشطة مع مجموع التبرعات وحساب نسبة الاكتمال برمجياً
             $activeCasesWithDonations = FoundationCase::where('foundation_id', $foundationId)
                 ->where('status', 'active')
                 ->withSum(['donations' => function($q) {
-                    $q->where('status', 'completed'); // حساب التبرعات المكتملة فقط
+                    $q->where('status', 'completed');
                 }], 'amount')
                 ->get();
 
             $nearCompletionCases = $activeCasesWithDonations->filter(function ($case) {
                 if ($case->target_amount > 0) {
                     $percentage = (($case->donations_sum_amount ?? 0) / $case->target_amount) * 100;
-                    return $percentage >= 85; // تصفية الحالات التي تخطت 85%
+                    return $percentage >= 85;
                 }
                 return false;
             })->count();
@@ -94,10 +81,6 @@ class FoundationDashboardController extends Controller
                 'expiring_documents'     => 0,
             ];
 
-            // ==========================================
-            // 4. أحدث الحالات (Latest Cases)
-            // ==========================================
-            // 🎯 التصحيح: مطابقة الحقول لموديل FoundationCase الخاص بك
             $latestCases = FoundationCase::where('foundation_id', $foundationId)
                 ->withSum(['donations' => function($q) {
                     $q->where('status', 'completed');
@@ -106,15 +89,11 @@ class FoundationDashboardController extends Controller
                 ->take(4)
                 ->get()
                 ->map(function ($case) {
-                    // حساب النسبة
                     $collected = $case->donations_sum_amount ?? 0;
                     $percentage = $case->target_amount > 0 ? round(($collected / $case->target_amount) * 100) : 0;
-
-                    // استخراج الصورة الأولى من مصفوفة الصور وتحويلها لرابط كامل
                     $firstImage = is_array($case->images) && count($case->images) > 0 ? $case->images[0] : null;
                     $imageUrl = !empty($firstImage) && !str_starts_with($firstImage, 'http') ? asset('storage/' . $firstImage) : $firstImage;
 
-                    // تحديد عدد الأيام المتبقية
                     $remainingDays = $case->end_date ? Carbon::parse($case->end_date)->diffInDays(now()) : 0;
 
                     return [
@@ -130,9 +109,6 @@ class FoundationDashboardController extends Controller
                     ];
                 });
 
-            // ==========================================
-            // 5. أحدث التبرعات (Latest Donations)
-            // ==========================================
             $latestDonations = Donation::where('foundation_id', $foundationId)
                 ->with('user:id,name,phone')
                 ->orderBy('created_at', 'desc')
@@ -151,9 +127,6 @@ class FoundationDashboardController extends Controller
                     ];
                 });
 
-            // ==========================================
-            // 6. أحدث طلبات التطوع (Latest Volunteer Apps)
-            // ==========================================
             $latestVolunteers = VolunteerOpportunity::where('foundation_id', $foundationId)
                 ->with(['volunteers' => function ($query) {
                     $query->orderBy('opportunity_volunteer.created_at', 'desc')->take(4);
@@ -177,9 +150,6 @@ class FoundationDashboardController extends Controller
                     ];
                 });
 
-            // ==========================================
-            // إرجاع الرد النهائي الشامل
-            // ==========================================
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب بيانات لوحة تحكم المؤسسة بنجاح.',

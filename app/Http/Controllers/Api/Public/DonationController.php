@@ -173,6 +173,11 @@ class DonationController extends Controller
                 }
             }
 
+            // 🎯 إرسال بريد إلكتروني للمتبرع العيني (إذا كان البريد غير وهمي)
+            if (!empty($donation->donor_email) && $donation->donor_email !== 'dummy@nabdatkhair.com') {
+                \Illuminate\Support\Facades\Mail::to($donation->donor_email)->send(new \App\Mail\DonationSuccessMail($donation));
+            }
+
             return response()->json(['status' => true, 'message' => 'تم تسجيل تبرعكم العيني بنجاح.', 'data' => $donation], 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Make Donation Error: " . $e->getMessage());
@@ -217,7 +222,7 @@ class DonationController extends Controller
                 $foundation = \App\Models\Foundation::find($donation->foundation_id);
                 $user = $donation->user_id ? \App\Models\User::find($donation->user_id) : null;
 
-                // 🔔 إشعار 1: للمستخدم (نص مطابق للصورة تماماً)
+                // 🔔 إشعار 1: للمستخدم
                 if ($user) {
                     $caseName = $case ? "لحالة '{$case->title}' " : "للمؤسسة ";
                     $user->notify(new \App\Notifications\GeneralNotification(
@@ -225,6 +230,12 @@ class DonationController extends Controller
                         "شكراً لك! تبرعك {$caseName}تم بنجاح ووصل إلى المستفيد.",
                         'success'
                     ));
+                }
+
+                // 🎯 إرسال إيميل للمتبرع بالدفع الإلكتروني
+                if (!empty($donation->donor_email) && $donation->donor_email !== 'dummy@nabdatkhair.com') {
+                    $caseTitle = $case ? $case->title : null;
+                    \Illuminate\Support\Facades\Mail::to($donation->donor_email)->send(new \App\Mail\DonationSuccessMail($donation, $caseTitle));
                 }
 
                 // 🔔 إشعار 2: للمؤسسة (تأكيد استلام الأموال)
@@ -409,7 +420,7 @@ class DonationController extends Controller
     /**
      * API: جلب تفاصيل تبرع محدد (إيصال التبرع)
      */
-public function show(Request $request, $id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
         try {
             $userId = $request->user()->id;
@@ -513,7 +524,6 @@ public function show(Request $request, $id): JsonResponse
                 'message' => 'تم جلب تفاصيل الإيصال بنجاح.',
                 'data'    => $receiptData
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API User Donation Details Error: " . $e->getMessage());
             return response()->json([

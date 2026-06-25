@@ -35,16 +35,25 @@ use App\Http\Controllers\Api\Public\FoundationRatingController;
 use App\Http\Controllers\Api\Public\PublicCaseController;
 use App\Http\Controllers\Api\User\GoogleAuthController;
 use App\Http\Controllers\Api\User\DashboardController;
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-
-
 use App\Http\Controllers\Api\Public\PlatformStatisticsController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\Volunteer\VolunteerAuthController;
+use App\Http\Controllers\Api\Volunteer\VolunteerPasswordController;
+use App\Http\Controllers\Api\Volunteer\VolunteerProfileController;
+use App\Http\Controllers\Api\Volunteer\CompletedActivityController;
+use App\Http\Controllers\Api\Volunteer\VolunteerHoursController;
+use App\Http\Controllers\Api\Volunteer\VolunteerRatingController;
+use App\Http\Controllers\Api\Volunteer\VolunteerDashboardController;
+use App\Http\Controllers\Api\User\UserAuthController;
+use App\Http\Controllers\Api\Volunteer\ExploreOpportunityController;
 
-// 🎯 جلب إحصائيات المنصة العامة (للرئيسية)
+// Route::get('/user', function (Request $request) {
+//     return $request->user();
+// })->middleware('auth:sanctum');
+
+
+
 Route::get('/statistics', [PlatformStatisticsController::class, 'index']);
-
 Route::post('/contact-us', [ContactMessageController::class, 'store']);
 
 //reviews
@@ -54,14 +63,11 @@ Route::post('/reviews', [ReviewController::class, 'store']);
 Route::get('/hero', [HeroController::class, 'index']);
 //tricker
 Route::get('/tickers', [TickerController::class, 'index']);
-
-// 🎯 إضافة تقييم لمؤسسة (متاح للجميع: زوار ومسجلين)
+//rate
 Route::post('/foundations/{foundationId}/rate', [FoundationRatingController::class, 'store']);
 
 
-// 🎯 جلب جميع الحالات (لصفحة استكشاف الحالات)
 Route::get('/cases', [PublicCaseController::class, 'index']);
-// 🎯 جلب تفاصيل حالة محددة بالكامل
 Route::get('/cases/{id}', [PublicCaseController::class, 'show']);
 
 
@@ -91,27 +97,21 @@ Route::prefix('zakat')->group(function () {
     Route::get('/', [ZakatController::class, 'getConditions']);
     Route::get('/gold-prices', [ZakatController::class, 'getGoldPrices']);
 });
+
 Route::get('/faqs', [FaqController::class, 'index']);
 Route::get('foundation/', [FoundationController::class, 'index']);
 Route::get('foundation/{id}/show', [FoundationController::class, 'show']);
 Route::get('/foundation/{id}/cases', [FoundationController::class, 'getFoundationCases']);
 Route::get('/cases/{caseId}', [FoundationController::class, 'getCaseDetails']);
-
-// 🎯 جلب خدمات/حملات المؤسسة (التبويب الثاني في بروفايل المؤسسة)
 Route::get('/foundations/{id}/services', [FoundationController::class, 'getFoundationServices']);
-// 🎯 جلب جميع الحالات التابعة لخدمة معينة داخل مؤسسة محددة
 Route::get('/foundations/{foundationId}/services/{serviceId}/cases', [FoundationController::class, 'getFoundationServiceCases']);
 Route::post('/foundations/{id}/send', [ContactFoundationController::class, 'store']);
-
-// 🎯 جلب معلومات الاتصال والفروع الخاصة بمؤسسة (التبويب الأخير)
 Route::get('/foundations/{id}/contact', [FoundationController::class, 'getContactDetails']);
+
 Route::prefix('foundation')->group(function () {
     Route::post('/register', [FoundationAuthController::class, 'register']);
     Route::post('/login', [FoundationAuthController::class, 'login']);
-
-    // مسار الدفع (يمكن أن يكون داخل auth:sanctum أو خارجه، لأن دالة store تعالج الحالتين)
     Route::post('/donate', [DonationController::class, 'store']);
-    // مسار استقبال الرد من Paymob (يجب أن يكون خااارج الـ auth:sanctum ومفتوح للجميع)
     Route::post('/paymob/callback', [DonationController::class, 'paymobCallback']);
 
     Route::middleware(['auth:sanctum', 'foundation'])->group(function () {
@@ -133,42 +133,34 @@ Route::prefix('foundation')->group(function () {
         Route::put('/opportunities/{id}', [VolunteerOpportunityController::class, 'update']);
         Route::delete('/opportunities/{id}', [VolunteerOpportunityController::class, 'destroy']);
 
-        Route::get('/cases/{caseId}/updates', [CaseUpdateController::class, 'index']); // 👈 جلب كل التحديثات لحالة محددة
-        Route::post('/cases/{caseId}/updates', [CaseUpdateController::class, 'store']); // إضافة تحديث
-        Route::put('/cases/updates/{updateId}', [CaseUpdateController::class, 'update']); // تعديل تحديث
-        Route::delete('/cases/updates/{updateId}', [CaseUpdateController::class, 'destroy']); // حذف تحديث
+        Route::get('/cases/{caseId}/updates', [CaseUpdateController::class, 'index']);
+        Route::post('/cases/{caseId}/updates', [CaseUpdateController::class, 'store']);
+        Route::put('/cases/updates/{updateId}', [CaseUpdateController::class, 'update']);
+        Route::delete('/cases/updates/{updateId}', [CaseUpdateController::class, 'destroy']);
 
 
-        Route::get('/donations', [FoundationDonationController::class, 'index']); // القائمة والفلترة
-        Route::get('/donations/report', [FoundationDonationController::class, 'report']); // التقرير الرقابي
-        Route::get('/donations/{id}', [FoundationDonationController::class, 'show']); // تفاصيل تبرع
-        Route::put('/donations/{id}/status', [FoundationDonationController::class, 'updateStatus']); // تغيير الحالة
-        Route::delete('/donations/{id}', [FoundationDonationController::class, 'destroy']); // حذف
+        Route::get('/donations', [FoundationDonationController::class, 'index']);
+        Route::get('/donations/report', [FoundationDonationController::class, 'report']);
+        Route::get('/donations/{id}', [FoundationDonationController::class, 'show']);
+        Route::put('/donations/{id}/status', [FoundationDonationController::class, 'updateStatus']);
+        Route::delete('/donations/{id}', [FoundationDonationController::class, 'destroy']);
 
-        Route::get('/volunteers', [FoundationVolunteerController::class, 'index']); // جلب الجدول والإحصائيات
-        Route::patch('/volunteers/{id}/toggle-status', [FoundationVolunteerController::class, 'toggleStatus']); // تفعيل وإيقاف المتطوع
-        // 🎯 عرض الملف الشخصي لمتطوع محدد (تفاصيل المتطوع)
+        Route::get('/volunteers', [FoundationVolunteerController::class, 'index']);
+        Route::patch('/volunteers/{id}/toggle-status', [FoundationVolunteerController::class, 'toggleStatus']);
         Route::get('/volunteers/{id}', [FoundationVolunteerController::class, 'show']);
-        // 🎯 عرض تفاصيل نشاط تطوعي محدد (تقرير منتهي)
         Route::get('/activities/{reportId}/details', [FoundationVolunteerController::class, 'showActivityDetails']);
-        // ... داخل مجموعة مسارات المؤسسة (Foundation) ...
 
-        // 🎯 مسارات إدارة طلبات الفرص التطوعية
-        Route::get('/opportunities/{id}/applications', [OpportunityApplicationController::class, 'index']); // جلب الطلبات والمسجلين
-        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/accept', [OpportunityApplicationController::class, 'accept']); // قبول
-        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/reject', [OpportunityApplicationController::class, 'reject']); // رفض
-
-
-        // 🎯 مسارات تقييم تقارير المتطوعين
-        Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']); // جلب كل تقارير الفرصة
-        Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']); // تقييم التقرير (موافقة/رفض، ساعات، نجوم)
+        Route::get('/opportunities/{id}/applications', [OpportunityApplicationController::class, 'index']);
+        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/accept', [OpportunityApplicationController::class, 'accept']);
+        Route::post('/opportunities/{opportunityId}/applications/{volunteerId}/reject', [OpportunityApplicationController::class, 'reject']);
+        Route::get('/opportunities/{opportunityId}/reports', [OpportunityReportEvaluationController::class, 'index']);
+        Route::post('/reports/{reportId}/evaluate', [OpportunityReportEvaluationController::class, 'evaluate']);
 
         Route::get('/messages', [FoundationMessageController::class, 'index']);
-        Route::get('/messages/{id}', [FoundationMessageController::class, 'show']); // لفتح المودال
+        Route::get('/messages/{id}', [FoundationMessageController::class, 'show']);
         Route::post('/messages/{id}/reply', [FoundationMessageController::class, 'reply']);
         Route::patch('/messages/{id}/toggle-read', [FoundationMessageController::class, 'toggleRead']);
         Route::delete('/messages/{id}', [FoundationMessageController::class, 'destroy']);
-        // 🎯 لوحة التحكم الرئيسية للمؤسسة
         Route::get('/dashboard', [FoundationDashboardController::class, 'index']);
 
         Route::get('/ratings', [FoundationRatingController::class, 'index']);
@@ -176,11 +168,6 @@ Route::prefix('foundation')->group(function () {
         Route::delete('/ratings/{id}', [FoundationRatingController::class, 'destroy']);
     });
 });
-
-
-
-use App\Http\Controllers\Api\User\UserAuthController;
-use App\Http\Controllers\Api\Volunteer\ExploreOpportunityController;
 
 Route::prefix('user')->group(function () {
     Route::post('/auth/google', [GoogleAuthController::class, 'handleGoogleLogin']);
@@ -197,51 +184,28 @@ Route::prefix('user')->group(function () {
     });
 });
 
-
-use App\Http\Controllers\Api\Volunteer\VolunteerAuthController;
-use App\Http\Controllers\Api\Volunteer\VolunteerPasswordController;
-use App\Http\Controllers\Api\Volunteer\VolunteerProfileController;
-use App\Http\Controllers\Api\Volunteer\CompletedActivityController;
-use App\Http\Controllers\Api\Volunteer\VolunteerHoursController;
-use App\Http\Controllers\Api\Volunteer\VolunteerRatingController;
-use App\Http\Controllers\Api\Volunteer\VolunteerDashboardController;
-
 Route::prefix('volunteer')->group(function () {
     Route::post('/register', [VolunteerAuthController::class, 'register']);
     Route::post('/login', [VolunteerAuthController::class, 'login']);
     Route::middleware(['auth:sanctum', 'volunteer'])->group(function () {
         Route::post('/logout', [VolunteerAuthController::class, 'logout']);
         Route::post('/change-password', [VolunteerPasswordController::class, 'update']);
-
         Route::get('/profile', [VolunteerProfileController::class, 'show']);
         Route::post('/profile/update', [VolunteerProfileController::class, 'update']);
-
         Route::get('/explore-opportunities', [ExploreOpportunityController::class, 'index']);
         Route::get('/explore-opportunities/{id}', [ExploreOpportunityController::class, 'show']);
         Route::post('/explore-opportunities/{id}/apply', [ExploreOpportunityController::class, 'apply']);
         Route::post('/explore-opportunities/{id}/cancel', [ExploreOpportunityController::class, 'cancel']);
-        // 🎯 قبول ورفض الدعوات
         Route::post('/explore-opportunities/{id}/accept', [\App\Http\Controllers\Api\Volunteer\VolunteerOpportunityController::class, 'acceptInvitation']);
         Route::post('/explore-opportunities/{id}/reject', [\App\Http\Controllers\Api\Volunteer\VolunteerOpportunityController::class, 'rejectInvitation']);
         Route::post('/explore-opportunities/{id}/report', [ExploreOpportunityController::class, 'submitReport']);
         Route::get('/my-tasks', [ExploreOpportunityController::class, 'myTasks']);
-
-        // 🎯 الأنشطة المنتهية للمتطوع (سجل الإنجازات والتقييمات)
         Route::get('/completed-activities', [CompletedActivityController::class, 'index']);
-
-        // 🎯 سجل الساعات التطوعية والتأثير المجتمعي
         Route::get('/hours-record', [VolunteerHoursController::class, 'index']);
-
-        // 🎯 تقييم التطوع وآراء المؤسسات
         Route::get('/ratings', [VolunteerRatingController::class, 'index']);
-
-        // 🎯 لوحة التحكم الرئيسية للمتطوع
         Route::get('/dashboard', [VolunteerDashboardController::class, 'index']);
     });
 });
-
-
-use App\Http\Controllers\Api\NotificationController;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);

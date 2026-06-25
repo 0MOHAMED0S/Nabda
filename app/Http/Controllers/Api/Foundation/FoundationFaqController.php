@@ -11,9 +11,6 @@ use Exception;
 
 class FoundationFaqController extends Controller
 {
-    /**
-     * مصفوفة رسائل التحقق باللغة العربية (مُعاد استخدامها)
-     */
     private $validationMessages = [
         'question.required' => 'حقل السؤال مطلوب ولا يمكن تركه فارغاً.',
         'question.string'   => 'يجب أن يكون السؤال نصاً.',
@@ -24,16 +21,10 @@ class FoundationFaqController extends Controller
         'status.in'         => 'حالة السؤال المدخلة غير صحيحة (يجب أن تكون: published أو archived).',
     ];
 
-    /**
-     * API: جلب جميع الأسئلة الشائعة الخاصة بالمؤسسة
-     */
     public function index(Request $request)
     {
         try {
-            // جلب الأسئلة المرتبطة بالمؤسسة التي سجلت الدخول حالياً
             $faqs = $request->user()->faqs()->orderBy('created_at', 'desc')->get();
-
-            // حالة: إذا لم تقم المؤسسة بإضافة أي أسئلة بعد
             if ($faqs->isEmpty()) {
                 return response()->json([
                     'status'  => true,
@@ -47,7 +38,6 @@ class FoundationFaqController extends Controller
                 'message' => 'تم جلب الأسئلة الشائعة بنجاح.',
                 'data'    => $faqs
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation FAQs Index Error: " . $e->getMessage());
 
@@ -58,9 +48,6 @@ class FoundationFaqController extends Controller
         }
     }
 
-    /**
-     * API: إضافة سؤال جديد
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -78,7 +65,6 @@ class FoundationFaqController extends Controller
         }
 
         try {
-            // إنشاء السؤال وربطه تلقائياً بالمؤسسة (بفضل العلاقة faqs)
             $faq = $request->user()->faqs()->create($request->only(['question', 'answer', 'status']));
 
             return response()->json([
@@ -86,7 +72,6 @@ class FoundationFaqController extends Controller
                 'message' => 'تمت إضافة السؤال بنجاح.',
                 'data'    => $faq
             ], 201);
-
         } catch (Exception $e) {
             Log::error("API Foundation FAQ Store Error: " . $e->getMessage());
 
@@ -97,15 +82,10 @@ class FoundationFaqController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل سؤال محدد
-     */
     public function show(Request $request, $id)
     {
         try {
             $faq = $request->user()->faqs()->find($id);
-
-            // التحقق من وجود السؤال وأنه يتبع للمؤسسة
             if (!$faq) {
                 return response()->json([
                     'status'  => false,
@@ -118,7 +98,6 @@ class FoundationFaqController extends Controller
                 'message' => 'تم جلب تفاصيل السؤال بنجاح.',
                 'data'    => $faq
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation FAQ Show Error: " . $e->getMessage());
 
@@ -129,13 +108,8 @@ class FoundationFaqController extends Controller
         }
     }
 
-    /**
-     * API: تعديل سؤال موجود (يدعم التحديث الجزئي - Partial Update)
-     */
     public function update(Request $request, $id)
     {
-        // استخدام 'sometimes' تعني: "تحقق من هذا الحقل فقط إذا تم إرساله في الـ Request"
-        // هذا يسمح للفرونت إند بتحديث الـ status فقط دون الحاجة لإرسال السؤال والإجابة مرة أخرى
         $validator = Validator::make($request->all(), [
             'question' => 'sometimes|required|string|max:255',
             'answer'   => 'sometimes|required|string',
@@ -149,8 +123,6 @@ class FoundationFaqController extends Controller
                 'errors'  => $validator->errors()
             ], 422);
         }
-
-        // التأكد من أن المستخدم أرسل بيانات لتحديثها فعلياً
         if (empty($request->all())) {
             return response()->json([
                 'status'  => false,
@@ -167,8 +139,6 @@ class FoundationFaqController extends Controller
                     'message' => 'السؤال المراد تحديثه غير موجود.'
                 ], 404);
             }
-
-            // تحديث الحقول التي تم تمريرها فقط
             $faq->update($request->only(['question', 'answer', 'status']));
 
             return response()->json([
@@ -176,7 +146,6 @@ class FoundationFaqController extends Controller
                 'message' => 'تم تحديث السؤال بنجاح.',
                 'data'    => $faq
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation FAQ Update Error: " . $e->getMessage());
 
@@ -187,9 +156,6 @@ class FoundationFaqController extends Controller
         }
     }
 
-    /**
-     * API: حذف سؤال
-     */
     public function destroy(Request $request, $id)
     {
         try {
@@ -208,7 +174,6 @@ class FoundationFaqController extends Controller
                 'status'  => true,
                 'message' => 'تم حذف السؤال نهائياً بنجاح.'
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation FAQ Delete Error: " . $e->getMessage());
 

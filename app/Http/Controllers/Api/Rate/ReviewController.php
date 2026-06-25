@@ -11,19 +11,14 @@ use Exception;
 
 class ReviewController extends Controller
 {
-    /**
-     * API: جلب جميع التقييمات المعتمدة لعرضها في الموقع
-     * (Public Endpoint)
-     */
-public function index()
+    public function index()
     {
         try {
-            // 1. جلب الحقول الأساسية مع علاقة المستخدم (إذا كان موجوداً) لجلب الصورة
             $reviews = Review::with('user:id,avatar') // نفترض أن صورة المستخدم موجودة في حقل avatar
-                             ->select('id', 'user_id', 'name', 'rating', 'message', 'created_at')
-                             ->where('is_approved', true)
-                             ->orderBy('created_at', 'desc')
-                             ->get();
+                ->select('id', 'user_id', 'name', 'rating', 'message', 'created_at')
+                ->where('is_approved', true)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($reviews->isEmpty()) {
                 return response()->json([
@@ -33,12 +28,9 @@ public function index()
                 ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. تنسيق البيانات
             $data = $reviews->map(function ($review) {
-                // معالجة صورة المستخدم
                 $userImage = null;
                 if ($review->user && $review->user->avatar) {
-                    // إذا كان مسار الصورة يبدأ بـ http (رابط خارجي) نأخذه كما هو، وإلا نضيف مسار السيرفر
                     $userImage = str_starts_with($review->user->avatar, 'http')
                         ? $review->user->avatar
                         : asset('storage/' . $review->user->avatar);
@@ -49,14 +41,10 @@ public function index()
                     'name'    => $review->name,
                     'rating'  => $review->rating,
                     'message' => $review->message,
-
-                    // 🎯 جلب صورة المستخدم (تكون null إذا لم يكن مسجلاً أو لا يملك صورة)
                     'image'   => $userImage,
-
-                    // 🎯 تحويل التاريخ للغة العربية
                     'date'    => $review->created_at
-                                    ? $review->created_at->locale('ar')->diffForHumans()
-                                    : null,
+                        ? $review->created_at->locale('ar')->diffForHumans()
+                        : null,
                 ];
             });
 
@@ -65,7 +53,6 @@ public function index()
                 'message' => 'تم جلب التقييمات بنجاح.',
                 'data'    => $data
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('API Reviews Index Error: ' . $e->getMessage());
 
@@ -77,12 +64,8 @@ public function index()
         }
     }
 
-    /**
-     * API: استقبال تقييم جديد من المستخدم أو الزائر
-     */
     public function store(Request $request)
     {
-        // 1. تعزيز قواعد التحقق (Hard Validation)
         $validator = Validator::make($request->all(), [
             'name'    => 'required|string|min:2|max:255',
             'rating'  => 'required|integer|min:1|max:5',
@@ -108,17 +91,14 @@ public function index()
         }
 
         try {
-            // 2. الحماية الجوهرية للـ Token (لمنع خطأ Foreign Key Constraint)
             $userId = null;
             if (auth('sanctum')->check()) {
                 $user = auth('sanctum')->user();
-                // نتأكد 100% أن صاحب التوكن هو مستخدم عادي وليس أدمن أو مؤسسة تختبر النظام
                 if ($user instanceof \App\Models\User) {
                     $userId = $user->id;
                 }
             }
 
-            // 3. حفظ البيانات
             $review = Review::create([
                 'user_id'     => $userId,
                 'name'        => $request->name,
@@ -132,7 +112,6 @@ public function index()
                 'message' => 'شكراً لتقييمك! تم استلام رسالتك بنجاح وهي قيد المراجعة الآن.',
                 'data'    => $review
             ], 201);
-
         } catch (Exception $e) {
             Log::error('API Reviews Store Error: ' . $e->getMessage());
 

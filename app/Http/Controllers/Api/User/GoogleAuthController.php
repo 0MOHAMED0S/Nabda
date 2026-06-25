@@ -13,44 +13,31 @@ use Illuminate\Support\Str;
 
 class GoogleAuthController extends Controller
 {
-    /**
-     * API: تسجيل الدخول أو إنشاء حساب عبر جوجل
-     */
     public function handleGoogleLogin(Request $request): JsonResponse
     {
-        // 1. التأكد من أن الفرونت إند أرسل التوكن
         $request->validate([
             'token' => 'required|string', // هذا هو الـ Access Token القادم من جوجل عبر الفرونت إند
         ]);
 
         try {
-            // 2. التواصل مع جوجل للتحقق من صحة التوكن وجلب بيانات المستخدم
             $googleUser = Socialite::driver('google')->stateless()->userFromToken($request->token);
-
-            // 3. البحث عن المستخدم في قاعدة بياناتنا باستخدام الإيميل
             $user = User::where('email', $googleUser->getEmail())->first();
 
             if (!$user) {
-                // إذا لم يكن مسجلاً، نقوم بإنشاء حساب جديد له
                 $user = User::create([
                     'name'      => $googleUser->getName(),
                     'email'     => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
                     'avatar'    => $googleUser->getAvatar(), // رابط صورة حساب جوجل
-                    // نضع كلمة مرور عشوائية لأنه سجل بحساب جوجل ولن يحتاجها
                     'password'  => Hash::make(uniqid() . Str::random(12)),
                 ]);
             } else {
-                // إذا كان مسجلاً مسبقاً (سواء بالإيميل العادي أو جوجل)، نحدث الـ google_id كإجراء تأكيدي
                 $user->update([
                     'google_id' => $googleUser->getId()
                 ]);
             }
 
-            // 4. إصدار توكن خاص بنظامنا (Sanctum) لكي يستخدمه الفرونت إند في باقي الطلبات
             $token = $user->createToken('UserAccess')->plainTextToken;
-
-            // توحيد شكل استرجاع الصورة للفرونت إند
             $user->avatar_url = filter_var($user->avatar, FILTER_VALIDATE_URL) ? $user->avatar : ($user->avatar ? asset('storage/' . $user->avatar) : null);
             $user->makeHidden('avatar');
 

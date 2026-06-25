@@ -24,13 +24,9 @@ class CaseUpdateController extends Controller
         ];
     }
 
-    /**
-     * API: جلب جميع التحديثات الخاصة بحالة معينة
-     */
     public function index(Request $request, $caseId): JsonResponse
     {
         try {
-            // التأكد من أن الحالة موجودة وتخص المؤسسة الحالية (حماية أمنية)
             $case = FoundationCase::where('id', $caseId)
                 ->where('foundation_id', $request->user()->id)
                 ->first();
@@ -42,7 +38,6 @@ class CaseUpdateController extends Controller
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // جلب التحديثات مرتبة بالأحدث تاريخاً
             $updates = CaseUpdate::where('foundation_case_id', $case->id)
                 ->orderBy('update_date', 'desc')
                 ->get();
@@ -62,13 +57,9 @@ class CaseUpdateController extends Controller
         }
     }
 
-/**
-     * API: إضافة تحديث جديد لحالة معينة
-     */
     public function store(Request $request, $caseId): JsonResponse
     {
         try {
-            // التأكد من أن الحالة موجودة وتخص المؤسسة الحالية
             $case = FoundationCase::where('id', $caseId)
                 ->where('foundation_id', $request->user()->id)
                 ->first();
@@ -100,7 +91,6 @@ class CaseUpdateController extends Controller
                 'description'        => $request->description,
             ]);
 
-            // 🔔 إضافة الإشعار: إرسال تنبيه لجميع المتبرعين (المسجلين) الذين ساهموا في هذه الحالة
             $donors = \App\Models\User::whereHas('donations', function ($query) use ($case) {
                 $query->where('case_id', $case->id)->where('status', 'completed');
             })->get();
@@ -128,13 +118,9 @@ class CaseUpdateController extends Controller
         }
     }
 
-    /**
-     * API: تعديل تحديث سابق
-     */
     public function update(Request $request, $updateId): JsonResponse
     {
         try {
-            // جلب التحديث والتأكد أن الحالة المرتبطة به تخص المؤسسة الحالية
             $update = CaseUpdate::whereHas('case', function ($query) use ($request) {
                 $query->where('foundation_id', $request->user()->id);
             })->where('id', $updateId)->first();
@@ -170,13 +156,9 @@ class CaseUpdateController extends Controller
         }
     }
 
-    /**
-     * API: حذف تحديث
-     */
     public function destroy(Request $request, $updateId): JsonResponse
     {
         try {
-            // جلب التحديث أمنياً عبر التحقق من ملكية المؤسسة
             $update = CaseUpdate::whereHas('case', function ($query) use ($request) {
                 $query->where('foundation_id', $request->user()->id);
             })->where('id', $updateId)->first();

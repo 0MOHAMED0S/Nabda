@@ -11,9 +11,7 @@ use Exception;
 
 class FoundationGoalController extends Controller
 {
-    /**
-     * مصفوفة رسائل التحقق باللغة العربية
-     */
+
     private $validationMessages = [
         'title.required'       => 'عنوان الهدف مطلوب ولا يمكن تركه فارغاً.',
         'title.string'         => 'يجب أن يكون العنوان نصاً.',
@@ -22,9 +20,6 @@ class FoundationGoalController extends Controller
         'description.string'   => 'يجب أن يكون الوصف نصاً.',
     ];
 
-    /**
-     * API: جلب جميع الأهداف الخاصة بالمؤسسة الحالية
-     */
     public function index(Request $request)
     {
         try {
@@ -43,7 +38,6 @@ class FoundationGoalController extends Controller
                 'message' => 'تم جلب أهداف المؤسسة بنجاح.',
                 'data'    => $goals
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Goals Index Error: " . $e->getMessage());
             return response()->json([
@@ -53,9 +47,6 @@ class FoundationGoalController extends Controller
         }
     }
 
-    /**
-     * API: إضافة هدف جديد
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -72,7 +63,6 @@ class FoundationGoalController extends Controller
         }
 
         try {
-            // يتم إنشاء الهدف وربطه مباشرة بالمؤسسة صاحبة التوكن
             $goal = $request->user()->goals()->create($request->only(['title', 'description']));
 
             return response()->json([
@@ -80,7 +70,6 @@ class FoundationGoalController extends Controller
                 'message' => 'تمت إضافة الهدف بنجاح.',
                 'data'    => $goal
             ], 201);
-
         } catch (Exception $e) {
             Log::error("API Foundation Goal Store Error: " . $e->getMessage());
             return response()->json([
@@ -90,9 +79,6 @@ class FoundationGoalController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل هدف محدد
-     */
     public function show(Request $request, $id)
     {
         try {
@@ -110,7 +96,6 @@ class FoundationGoalController extends Controller
                 'message' => 'تم جلب تفاصيل الهدف بنجاح.',
                 'data'    => $goal
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Goal Show Error: " . $e->getMessage());
             return response()->json([
@@ -120,12 +105,8 @@ class FoundationGoalController extends Controller
         }
     }
 
-    /**
-     * API: تعديل هدف موجود (يدعم التحديث الجزئي)
-     */
     public function update(Request $request, $id)
     {
-        // استخدام sometimes لدعم التحديث الجزئي
         $validator = Validator::make($request->all(), [
             'title'       => 'sometimes|required|string|max:255',
             'description' => 'sometimes|required|string',
@@ -139,7 +120,6 @@ class FoundationGoalController extends Controller
             ], 422);
         }
 
-        // منع الطلبات الفارغة
         if (empty($request->all())) {
             return response()->json([
                 'status'  => false,
@@ -164,7 +144,6 @@ class FoundationGoalController extends Controller
                 'message' => 'تم تحديث الهدف بنجاح.',
                 'data'    => $goal
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Goal Update Error: " . $e->getMessage());
             return response()->json([
@@ -174,9 +153,6 @@ class FoundationGoalController extends Controller
         }
     }
 
-    /**
-     * API: حذف هدف
-     */
     public function destroy(Request $request, $id)
     {
         try {
@@ -195,7 +171,6 @@ class FoundationGoalController extends Controller
                 'status'  => true,
                 'message' => 'تم حذف الهدف نهائياً بنجاح.'
             ], 200);
-
         } catch (Exception $e) {
             Log::error("API Foundation Goal Delete Error: " . $e->getMessage());
             return response()->json([

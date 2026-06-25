@@ -11,17 +11,12 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    /**
-     * جلب بيانات لوحة التحكم الرئيسية للمستخدم
-     */
+
     public function index(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
-            Carbon::setLocale('ar'); // لتعريب التواريخ
-
-            // 1. الكروت العلوية (الإحصائيات الأساسية)
-            // 🎯 تمت إضافة with('foundationCase') لمنع مشكلة N+1 وتقليل استهلاك الداتابيز
+            Carbon::setLocale('ar');
             $completedDonations = Donation::with('foundationCase')
                 ->where('user_id', $user->id)
                 ->where('status', 'completed')
@@ -30,15 +25,12 @@ class DashboardController extends Controller
             $totalDonationsCount = $completedDonations->count();
             $totalAmount         = $completedDonations->where('donation_type', 'financial')->sum('amount');
 
-            // حساب عدد الحالات والجمعيات الفريدة
             $supportedCasesCount       = $completedDonations->whereNotNull('case_id')->unique('case_id')->count();
             $supportedFoundationsCount = $completedDonations->whereNotNull('foundation_id')->unique('foundation_id')->count();
 
-            // 2. نظام النقاط والتصنيف
             $points = $totalDonationsCount * 10;
             $badge  = $this->calculateBadge($points);
 
-            // 3. جدول آخر التبرعات (أحدث 5 تبرعات)
             $recentDonations = Donation::with(['foundation', 'foundationCase'])
                 ->where('user_id', $user->id)
                 ->orderBy('created_at', 'desc')
@@ -47,7 +39,6 @@ class DashboardController extends Controller
                 ->map(function ($donation) {
                     $isFinancial = $donation->donation_type === 'financial';
 
-                    // 🎯 ترجمة حالة التبرع
                     $statusAr = match ($donation->status) {
                         'completed'  => 'مكتمل',
                         'pending'    => 'قيد المراجعة',
@@ -65,17 +56,14 @@ class DashboardController extends Controller
                         'type'            => $donation->donation_type,
                         'type_ar'         => $isFinancial ? 'مالي' : 'عيني',
 
-                        // التفاصيل (المبلغ أو اسم المادة العينية)
                         'amount_or_item'  => $isFinancial
                                                 ? number_format($donation->amount) . ' ج.م'
                                                 : ($donation->item_category ?? 'مواد عينية'),
 
-                        // الوصف الفرعي
                         'description'     => $isFinancial
                                                 ? 'تبرع نقدي لصالح ' . ($donation->foundationCase ? $donation->foundationCase->title : 'عام')
                                                 : ($donation->item_description ?? 'تبرع عيني'),
 
-                        // طريقة الدفع أو التسليم
                         'method'          => $this->translateMethod($donation),
 
                         'status_en'       => $donation->status, // 🎯 حالة التبرع بالإنجليزية
@@ -85,7 +73,6 @@ class DashboardController extends Controller
                     ];
                 });
 
-            // 4. الشارت (توزيع التبرعات)
             $distribution = $this->calculateDonationDistribution($completedDonations);
 
             return response()->json([
@@ -117,9 +104,6 @@ class DashboardController extends Controller
         }
     }
 
-    /**
-     * دالة مساعدة لتحديد رتبة المتبرع بناءً على النقاط
-     */
     private function calculateBadge(int $points): string
     {
         if ($points >= 200) return 'متبرع ماسي';
@@ -129,9 +113,6 @@ class DashboardController extends Controller
         return 'متبرع مبادر';
     }
 
-    /**
-     * دالة مساعدة لترجمة طريقة الدفع أو التسليم للعربية
-     */
     private function translateMethod($donation): string
     {
         if ($donation->donation_type === 'financial') {
@@ -151,9 +132,6 @@ class DashboardController extends Controller
         };
     }
 
-    /**
-     * دالة مساعدة لحساب النسب المئوية لتوزيع التبرعات (للشارت)
-     */
     private function calculateDonationDistribution($donations): array
     {
         $total = $donations->count();
@@ -180,7 +158,6 @@ class DashboardController extends Controller
             ];
         }
 
-        // ترتيب التوزيع من النسبة الأكبر للأصغر
         usort($distribution, function($a, $b) {
             return $b['percentage'] <=> $a['percentage'];
         });

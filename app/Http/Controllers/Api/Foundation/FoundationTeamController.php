@@ -12,9 +12,7 @@ use Exception;
 
 class FoundationTeamController extends Controller
 {
-    /**
-     * مصفوفة رسائل التحقق باللغة العربية لجميع الحالات
-     */
+
     private $validationMessages = [
         'name.required'     => 'حقل الاسم مطلوب ولا يمكن تركه فارغاً.',
         'name.string'       => 'يجب أن يكون الاسم نصاً.',
@@ -37,9 +35,7 @@ class FoundationTeamController extends Controller
         'image.max'         => 'حجم الصورة يجب ألا يتجاوز 2 ميجابايت.',
     ];
 
-    /**
-     * API: جلب جميع أعضاء الفريق للمؤسسة الحالية
-     */
+
     public function index(Request $request)
     {
         try {
@@ -75,12 +71,8 @@ class FoundationTeamController extends Controller
         }
     }
 
-    /**
-     * API: إضافة عضو جديد للفريق
-     */
     public function store(Request $request)
     {
-        // جميع البيانات هنا مطلوبة إجبارياً (Required)
         $validator = Validator::make($request->all(), [
             'name'     => 'required|string|max:255',
             'position' => 'required|string|max:255',
@@ -99,8 +91,6 @@ class FoundationTeamController extends Controller
 
         try {
             $data = $request->only(['name', 'position', 'phone', 'status']);
-
-            // رفع الصورة الإجبارية
             $data['image'] = $request->file('image')->store('foundations/team', 'public');
 
             $member = $request->user()->teamMembers()->create($data);
@@ -119,9 +109,6 @@ class FoundationTeamController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل عضو محدد
-     */
     public function show(Request $request, $id)
     {
         try {
@@ -148,12 +135,9 @@ class FoundationTeamController extends Controller
         }
     }
 
-    /**
-     * API: تعديل بيانات العضو (يدعم التحديث الجزئي باستخدام sometimes)
-     */
+
     public function update(Request $request, $id)
     {
-        // استخدام sometimes يجعل الحقل مطلوباً فقط إذا تم تمريره في الطلب
         $validator = Validator::make($request->all(), [
             'name'     => 'sometimes|required|string|max:255',
             'position' => 'sometimes|required|string|max:255',
@@ -170,7 +154,6 @@ class FoundationTeamController extends Controller
             ], 422);
         }
 
-        // التأكد من أن المستخدم أرسل بيانات لتحديثها فعلياً (تجنب استعلامات داتابيز فارغة)
         if (empty($request->all()) && !$request->hasFile('image')) {
             return response()->json([
                 'status'  => false,
@@ -190,7 +173,6 @@ class FoundationTeamController extends Controller
 
             $data = $request->only(['name', 'position', 'phone', 'status']);
 
-            // إذا أرسل صورة جديدة، نمسح القديمة ونرفع الجديدة
             if ($request->hasFile('image')) {
                 if ($member->image && Storage::disk('public')->exists($member->image)) {
                     Storage::disk('public')->delete($member->image);
@@ -198,7 +180,6 @@ class FoundationTeamController extends Controller
                 $data['image'] = $request->file('image')->store('foundations/team', 'public');
             }
 
-            // تحديث الحقول التي تم إرسالها فقط
             if (!empty($data)) {
                 $member->update($data);
             }
@@ -217,9 +198,6 @@ class FoundationTeamController extends Controller
         }
     }
 
-    /**
-     * API: حذف عضو من الفريق
-     */
     public function destroy(Request $request, $id)
     {
         try {
@@ -232,7 +210,6 @@ class FoundationTeamController extends Controller
                 ], 404);
             }
 
-            // حذف الصورة من السيرفر قبل الحذف من قاعدة البيانات للحفاظ على المساحة
             if ($member->image && Storage::disk('public')->exists($member->image)) {
                 Storage::disk('public')->delete($member->image);
             }

@@ -11,15 +11,11 @@ use Exception;
 
 class FoundationCaseController extends Controller
 {
-    /**
-     * مصفوفة رسائل التحقق باللغة العربية الشاملة لكل الحالات
-     */
+
     private function validationMessages()
     {
         return [
             'title.required'               => 'عنوان الحالة مطلوب.',
-
-            // 🎯 تم التصحيح هنا: استبدال campaign_type بـ service_id
             'service_id.required'          => 'يرجى اختيار الخدمة المرتبطة بهذه الحالة.',
             'service_id.exists'            => 'الخدمة المختارة غير صالحة أو غير موجودة.',
 
@@ -37,7 +33,6 @@ class FoundationCaseController extends Controller
             'goal_type.required'           => 'يرجى تحديد نوع الهدف (مالي أو عيني).',
             'goal_type.in'                 => 'نوع الهدف غير صحيح.',
 
-            // 🎯 رسائل التحقق الذكية للمبلغ ونوع الهدف
             'target_amount.required'       => 'المبلغ المطلوب إجباري لأن نوع الهدف (مالي).',
             'target_amount.required_if'    => 'المبلغ المطلوب إجباري عندما تختار أن نوع الهدف (مالي).',
             'target_amount.prohibited'     => 'عذراً، لا يمكنك إدخال مبلغ مالي لأن نوع الهدف (عيني).',
@@ -52,12 +47,9 @@ class FoundationCaseController extends Controller
         ];
     }
 
-    /** 1. جلب كل الحالات (مع الإحصائيات وكل تفاصيل الحالة) */
-
-public function index(Request $request)
+    public function index(Request $request)
     {
         try {
-            // 1. 🎯 تحديث الاستعلام لجلب الخدمة + تصنيف الخدمة (Nested Relationship)
             $cases = $request->user()->cases()
                 ->with('service.category') // 👈 جلب الخدمة والتصنيف معاً
                 ->withCount(['donations as donors_count' => function ($query) {
@@ -155,7 +147,7 @@ public function index(Request $request)
         }
     }
 
-public function store(Request $request)
+    public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'title'                  => 'required|string|max:255',
@@ -167,13 +159,8 @@ public function store(Request $request)
             'beneficiary_address'    => 'required|string|max:500',
             'priority'               => 'required|in:urgent,normal',
             'end_date'               => 'required|date|after:today',
-
-            // 🎯 تم التصحيح: إضافة 'both' لقائمة الخيارات المتاحة
             'goal_type'              => 'required|in:financial,in-kind,both',
-
-            // 🎯 تم التصحيح: جعل المبلغ مطلوباً في حالة financial أو both
             'target_amount'          => 'required_if:goal_type,financial,both|prohibited_if:goal_type,in-kind|numeric|min:1',
-
             'images'                 => 'nullable|array',
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'nullable|array',
@@ -190,10 +177,7 @@ public function store(Request $request)
         }
 
         try {
-            // 🎯 استخراج البيانات المطلوبة
             $data = $request->only(['title', 'service_id', 'main_description', 'additional_description', 'beneficiary_name', 'beneficiary_age', 'beneficiary_address', 'priority', 'end_date', 'goal_type', 'target_amount']);
-
-            // تصفير المبلغ فقط إذا كان الهدف عيني بحت
             if ($data['goal_type'] === 'in-kind') {
                 $data['target_amount'] = null;
             }
@@ -213,11 +197,7 @@ public function store(Request $request)
             }
 
             $case = $request->user()->cases()->create($data);
-
-            // 🎯 تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
             $caseData = $case->toArray();
-
-            // الحفاظ على توافق الفرونت إند في الـ Production
             $caseData['campaign_type'] = $case->service ? $case->service->title : 'خدمة عامة';
             unset($caseData['service']); // تنظيف لعدم تكرار البيانات
 
@@ -238,7 +218,6 @@ public function store(Request $request)
                 'message' => 'تم إضافة الحالة بنجاح.',
                 'data'    => $caseData
             ], 201, [], JSON_UNESCAPED_UNICODE);
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("API Foundation Case Store Error: " . $e->getMessage());
             return response()->json([
@@ -248,11 +227,9 @@ public function store(Request $request)
         }
     }
 
-    /** 3. عرض حالة واحدة مع حساباتها */
-public function show(Request $request, $id)
+    public function show(Request $request, $id)
     {
         try {
-            // 1. 🎯 جلب الحالة مع حساب التبرعات وجلب علاقة الخدمة والتصنيف
             $case = $request->user()->cases()
                 ->with('service.category') // 👈 جلب الخدمة وتصنيفها
                 ->withCount(['donations as donors_count' => function ($query) {
@@ -267,7 +244,6 @@ public function show(Request $request, $id)
                 return response()->json(['status' => false, 'message' => 'الحالة غير موجودة.'], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 🎯 التعديل هنا: نعتبر الحالة مالية إذا كانت 'financial' أو 'both' لكي تظهر الأرقام بشكل صحيح
             $isFinancial = in_array($case->goal_type, ['financial', 'both']);
 
             $collected = $isFinancial ? ($case->collected_amount ?? 0) : ($case->donors_count ?? 0);
@@ -278,11 +254,8 @@ public function show(Request $request, $id)
             } elseif (!$isFinancial && $case->status === 'completed') {
                 $percentage = 100;
             }
-
-            // تجهيز البيانات النهائية
             $caseData = $case->toArray();
 
-            // 2. 🎯 تجهيز بيانات الخدمة وتصنيفها للفرونت إند (مهم جداً للإنتاج)
             if ($case->service) {
                 $caseData['campaign_type']    = $case->service->title; // للحفاظ على التوافق
                 $caseData['service_name']     = $case->service->title;
@@ -295,7 +268,6 @@ public function show(Request $request, $id)
                 $caseData['service_category'] = 'غير مصنف';
             }
 
-            // 3. 🎯 تحويل مسارات الملفات إلى روابط كاملة بأمان (Full URLs)
             if (isset($caseData['images']) && is_array($caseData['images'])) {
                 $caseData['images'] = array_map(function ($img) {
                     return \Illuminate\Support\Str::startsWith($img, ['http://', 'https://']) ? $img : asset('storage/' . $img);
@@ -314,14 +286,11 @@ public function show(Request $request, $id)
                     : asset('storage/' . $caseData['video']);
             }
 
-            // 4. إضافة الحسابات الإضافية للواجهة
-            // 🎯 الآن ستعرض target_amount بشكل صحيح في حالة الـ both والـ financial
             $caseData['target_amount']         = $isFinancial ? $case->target_amount : 'كمية (عيني)';
             $caseData['collected_amount']      = $collected;
             $caseData['completion_percentage'] = $percentage;
             $caseData['donors_count']          = $case->donors_count ?? 0;
 
-            // تنظيف الكائن الإضافي حتى لا يتكرر بالرد
             unset($caseData['service']);
 
             return response()->json([
@@ -335,20 +304,14 @@ public function show(Request $request, $id)
         }
     }
 
-    /** 4. تحديث حالة (المُحسّنة والمحمية) */
-public function update(Request $request, $id)
+    public function update(Request $request, $id)
     {
         $case = $request->user()->cases()->find($id);
         if (!$case) return response()->json(['status' => false, 'message' => 'الحالة غير موجودة أو تم حذفها.'], 404, [], JSON_UNESCAPED_UNICODE);
 
-        // معرفة نوع الهدف النهائي (سواء أرسله الآن في الطلب أو الموجود مسبقاً في الداتابيز)
         $currentGoalType = $request->input('goal_type', $case->goal_type);
-
-        // القواعد الأساسية
         $rules = [
             'title'                  => 'sometimes|required|string|max:255',
-
-            // 🎯 تم التصحيح: استخدام service_id بدلاً من campaign_type
             'service_id'             => 'sometimes|required|exists:services,id',
 
             'main_description'       => 'sometimes|required|string',
@@ -358,11 +321,7 @@ public function update(Request $request, $id)
             'beneficiary_address'    => 'sometimes|required|string|max:500',
             'priority'               => 'sometimes|required|in:urgent,normal',
             'end_date'               => 'sometimes|required|date',
-
-            // 🎯 تم التعديل: السماح بخيار both
             'goal_type'              => 'sometimes|required|in:financial,in-kind,both',
-
-            // 🛡️ التحقق من محتوى المصفوفات للصور والملفات
             'images'                 => 'sometimes|nullable|array',
             'images.*'               => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'documents'              => 'sometimes|nullable|array',
@@ -370,17 +329,13 @@ public function update(Request $request, $id)
             'video'                  => 'sometimes|nullable|file|mimes:mp4,avi,mov,webm|max:51200',
         ];
 
-        // 🎯 🛡️ القواعد الديناميكية لـ target_amount بناءً على نوع الهدف (مالي أو كلاهما)
         if (in_array($currentGoalType, ['financial', 'both'])) {
             if ($request->has('goal_type')) {
-                // إذا أرسل المستخدم تعديلاً صريحاً على "نوع الهدف"، فهو مجبر على تمرير المبلغ
                 $rules['target_amount'] = 'required|numeric|min:1';
             } else {
-                // إذا كان الهدف مالي/كلاهما مسبقاً وهو يُعدل شيئاً آخر (كالاسم)، فلا نجبره على تمرير المبلغ، ولكن إن مرره يجب أن يكون صالحاً
                 $rules['target_amount'] = 'sometimes|required|numeric|min:1';
             }
         } else {
-            // إذا كان الهدف النهائي "عيني" (in-kind)، نمنع تماماً تمرير أي مبلغ
             $rules['target_amount'] = 'prohibited';
         }
 
@@ -391,7 +346,6 @@ public function update(Request $request, $id)
         }
 
         try {
-            // 🎯 تم التعديل: جلب service_id بدلاً من campaign_type
             $data = $request->only([
                 'title',
                 'service_id',
@@ -407,7 +361,6 @@ public function update(Request $request, $id)
                 'status'
             ]);
 
-            // 🛡️ تنظيف البيانات: التأكد من تصفير المبلغ في حال كان الهدف النهائي عيني فقط
             $finalGoalType = $data['goal_type'] ?? $case->goal_type;
             if ($finalGoalType === 'in-kind') {
                 $data['target_amount'] = null;
@@ -432,16 +385,12 @@ public function update(Request $request, $id)
                 $case->update($data);
             }
 
-            // 🎯 تجهيز البيانات للإرجاع وتوافقها مع الفرونت إند
-            // تحميل العلاقة مع الخدمة لجلب اسمها
             $case->load('service');
             $caseData = $case->toArray();
 
-            // تعويض حقل campaign_type باسم الخدمة للفرونت إند
             $caseData['campaign_type'] = $case->service ? $case->service->title : 'خدمة عامة';
             unset($caseData['service']); // تنظيف
 
-            // تحويل مسارات الملفات إلى روابط كاملة للرد (Full URLs)
             if (isset($caseData['images']) && is_array($caseData['images'])) {
                 $caseData['images'] = array_map(fn($img) => asset('storage/' . $img), $caseData['images']);
             }
@@ -461,7 +410,6 @@ public function update(Request $request, $id)
         }
     }
 
-    /** 5. حذف حالة بالكامل مع ملفاتها */
     public function destroy(Request $request, $id)
     {
         try {
@@ -480,7 +428,6 @@ public function update(Request $request, $id)
         }
     }
 
-    /** 6. حذف ملف محدد (صورة/مستند/فيديو) */
     public function deleteFile(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
@@ -507,18 +454,12 @@ public function update(Request $request, $id)
                 return response()->json(['status' => false, 'message' => 'الحالة غير موجودة.'], 404);
             }
 
-            // 🎯 التصحيح الجوهري: تنظيف المسار (Path Cleaning)
             $path = $request->file_path;
-
-            // إذا كان المسار يحتوي على الرابط الكامل أو كلمة /storage/ نقوم باقتطاعها
             if (str_contains($path, '/storage/')) {
-                // نأخذ ما بعد كلمة /storage/ ليتطابق مع ما في قاعدة البيانات
                 $path = explode('/storage/', $path)[1];
             }
 
             $type = $request->file_type;
-
-            // أ) معالجة الفيديو
             if ($type === 'video') {
                 if ($case->video === $path) {
                     if (Storage::disk('public')->exists($path)) {
@@ -527,27 +468,18 @@ public function update(Request $request, $id)
                     $case->update(['video' => null]);
                     return response()->json(['status' => true, 'message' => 'تم حذف الفيديو بنجاح.']);
                 }
-            }
-            // ب) معالجة الصور والمستندات (المصفوفات)
-            else {
+            } else {
                 $column = $type === 'image' ? 'images' : 'documents';
                 $files = $case->{$column} ?? [];
 
                 $index = array_search($path, $files);
 
                 if ($index !== false) {
-                    // حذف الملف من السيرفر
                     if (Storage::disk('public')->exists($path)) {
                         Storage::disk('public')->delete($path);
                     }
-
-                    // حذف المسار من المصفوفة
                     unset($files[$index]);
-
-                    // إعادة ترتيب مفاتيح المصفوفة (ضروري جداً)
                     $updatedFiles = array_values($files);
-
-                    // حفظ التعديل في الداتابيز
                     $case->update([$column => $updatedFiles]);
 
                     return response()->json([
@@ -558,7 +490,6 @@ public function update(Request $request, $id)
                 }
             }
 
-            // إذا لم يتم العثور على التطابق بعد التنظيف
             return response()->json(['status' => false, 'message' => 'الملف المطلوب غير موجود في هذه الحالة.'], 404);
         } catch (Exception $e) {
             Log::error("API Foundation Case Delete File Error: " . $e->getMessage());
@@ -566,11 +497,8 @@ public function update(Request $request, $id)
         }
     }
 
-    /** * 7. تحديث حالة الحملة فقط (مستقلة)
-     */
     public function updateStatus(Request $request, $id)
     {
-        // 1. التحقق من صحة الحالة المدخلة
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:active,completed,cancelled,archived',
         ], [
@@ -587,7 +515,6 @@ public function update(Request $request, $id)
         }
 
         try {
-            // 2. البحث عن الحالة (مع التأكد أنها تتبع للمؤسسة المسجلة الدخول)
             $case = $request->user()->cases()->find($id);
 
             if (!$case) {
@@ -597,7 +524,6 @@ public function update(Request $request, $id)
                 ], 404);
             }
 
-            // 3. تحديث الحالة
             $case->update([
                 'status' => $request->status
             ]);

@@ -141,7 +141,7 @@ class FoundationController extends Controller
         }
     }
 
-/**
+    /**
      * عرض قائمة المؤسسات المعتمدة فقط (المقبولة) مع إحصائيات نشاطها
      */
     public function approvedIndex()
@@ -171,7 +171,7 @@ class FoundationController extends Controller
                     // 5. إجمالي المبالغ المالية التي تم جمعها لهذه المؤسسة
                     'donations as total_collected_amount' => function ($query) {
                         $query->where('status', 'completed')
-                              ->where('donation_type', 'financial');
+                            ->where('donation_type', 'financial');
                     }
                 ], 'amount')
                 ->orderBy('updated_at', 'desc')
@@ -185,7 +185,6 @@ class FoundationController extends Controller
             ];
 
             return view('admin.foundations.approve', compact('foundations', 'stats'));
-
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Foundation Approved Index Error: " . $e->getMessage());
             return back()->with('error', 'حدث خطأ تقني أثناء جلب بيانات المؤسسات المعتمدة.');

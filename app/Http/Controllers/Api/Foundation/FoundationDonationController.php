@@ -13,27 +13,22 @@ use Exception;
 
 class FoundationDonationController extends Controller
 {
-    /**
-     * API: جلب قائمة التبرعات مع الإحصائيات العلوية والفلترة (بدون Pagination)
-     */
+
     public function index(Request $request): JsonResponse
     {
         try {
             $foundationId = $request->user()->id;
             $query = Donation::where('foundation_id', $foundationId);
 
-            // 1. حساب الإحصائيات العلوية (الموجودة في الصورة الأولى)
             $stats = [
                 'total_donations'   => (clone $query)->count(),
                 'cash_donations'    => (clone $query)->where('donation_type', 'financial')->count(),
                 'inkind_donations'  => (clone $query)->where('donation_type', 'in-kind')->count(),
-                // حساب إجمالي المبالغ النقدية المكتملة فقط
                 'total_amount'      => (clone $query)->where('donation_type', 'financial')
                                                      ->where('status', 'completed')
                                                      ->sum('amount'),
             ];
 
-            // 2. تطبيق الفلاتر (البحث، النوع، الحالة، طريقة الدفع/التسليم)
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
@@ -59,12 +54,10 @@ class FoundationDonationController extends Controller
                 });
             }
 
-            // 3. جلب جميع البيانات دفعة واحدة (بدون Pagination)
             $donations = $query->with('foundationCase:id,title') // جلب اسم الحالة إن وُجدت
                                ->orderBy('created_at', 'desc')
                                ->get();
 
-            // 4. تحويل صورة التبرع إلى رابط كامل (Full URL)
             $donations->transform(function ($donation) {
                 if ($donation->donation_image) {
                     $donation->donation_image_url = asset('storage/' . $donation->donation_image);
@@ -88,9 +81,6 @@ class FoundationDonationController extends Controller
         }
     }
 
-    /**
-     * API: التقرير الرقابي الشامل (مطابق لصورة تقرير رقابي)
-     */
     public function report(Request $request): JsonResponse
     {
         try {
@@ -100,7 +90,6 @@ class FoundationDonationController extends Controller
             $currentMonth = Carbon::now()->month;
             $currentYear = Carbon::now()->year;
 
-            // --- 1. التبرعات النقدية ---
             $cashQuery = (clone $baseQuery)->where('donation_type', 'financial');
             $totalCashAmount = (clone $cashQuery)->where('status', 'completed')->sum('amount');
             $cashCount = $cashQuery->count();
@@ -116,7 +105,6 @@ class FoundationDonationController extends Controller
                 ]
             ];
 
-            // --- 2. التبرعات العينية ---
             $inkindQuery = (clone $baseQuery)->where('donation_type', 'in-kind');
 
             $inkindStats = [
@@ -125,7 +113,6 @@ class FoundationDonationController extends Controller
                     'completed_or_received' => (clone $inkindQuery)->whereIn('status', ['completed', 'received'])->count(),
                     'pending'               => (clone $inkindQuery)->where('status', 'pending')->count(),
                 ],
-                // تجميع بناءً على فئة العنصر (حسب الصورة: مواد غذائية، ملابس، أدوات مدرسية، إلخ)
                 'categories' => (clone $inkindQuery)
                                     ->selectRaw('item_category, COUNT(*) as count')
                                     ->groupBy('item_category')
@@ -133,7 +120,6 @@ class FoundationDonationController extends Controller
                                     ->toArray()
             ];
 
-            // --- 3. تقرير شهري ---
             $monthlyQuery = (clone $baseQuery)->whereMonth('created_at', $currentMonth)
                                               ->whereYear('created_at', $currentYear);
             $monthlyStats = [
@@ -158,9 +144,6 @@ class FoundationDonationController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل تبرع محدد
-     */
     public function show(Request $request, $id): JsonResponse
     {
         try {
@@ -190,9 +173,6 @@ class FoundationDonationController extends Controller
         }
     }
 
-    /**
-     * API: تغيير حالة التبرع (مثال: من معلق إلى مستلم أو مكتمل)
-     */
     public function updateStatus(Request $request, $id): JsonResponse
     {
         try {
@@ -203,7 +183,6 @@ class FoundationDonationController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                // الحالات المتوقعة بناءً على الشاشة (pending, received, completed, cancelled)
                 'status' => 'required|string|in:pending,received,completed,cancelled'
             ]);
 
@@ -225,9 +204,6 @@ class FoundationDonationController extends Controller
         }
     }
 
-    /**
-     * API: حذف تبرع (في حال كان ملغى أو وهمي)
-     */
     public function destroy(Request $request, $id): JsonResponse
     {
         try {

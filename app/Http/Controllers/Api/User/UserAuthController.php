@@ -16,9 +16,6 @@ use Exception;
 
 class UserAuthController extends Controller
 {
-    /**
-     * API: تسجيل حساب مستخدم جديد (متبرع)
-     */
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -98,12 +95,8 @@ class UserAuthController extends Controller
         }
     }
 
-    /**
-     * API: تسجيل الدخول (ذكي: يدعم الإيميل أو رقم الهاتف)
-     */
     public function login(Request $request): JsonResponse
     {
-        // 1. التحقق من المدخلات (البريد الإلكتروني وكلمة المرور فقط)
         $validator = Validator::make($request->all(), [
             'email'    => 'required|email',
             'password' => 'required|string',
@@ -122,13 +115,8 @@ class UserAuthController extends Controller
         }
 
         try {
-            // 2. تنظيف المدخل (إزالة الفراغات وتحويله لأحرف صغيرة لضمان المطابقة الدقيقة)
             $email = strtolower(trim($request->email));
-
-            // 3. البحث عن المستخدم بالبريد الإلكتروني فقط
             $user = User::where('email', $email)->first();
-
-            // 4. التحقق الأمني (تجنب الـ Timing Attacks)
             if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'status'  => false,
@@ -136,10 +124,7 @@ class UserAuthController extends Controller
                 ], 401, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 5. إصدار التوكن
             $token = $user->createToken('UserAccess')->plainTextToken;
-
-            // 🎯 6. تهيئة البيانات للعرض (معالجة رابط الصورة: جوجل أو محلي)
             if ($user->avatar) {
                 $user->avatar_url = filter_var($user->avatar, FILTER_VALIDATE_URL) ? $user->avatar : asset('storage/' . $user->avatar);
             } else {
@@ -164,16 +149,11 @@ class UserAuthController extends Controller
         }
     }
 
-    /**
-     * API: جلب الملف الشخصي للمستخدم الحالي (مع كافة البيانات)
-     */
     public function profile(Request $request): JsonResponse
     {
         try {
-            // جلب المستخدم الحالي
             $user = $request->user();
 
-            // 🛡️ حماية التصعيد (Privilege Escalation Prevention)
             if (!$user instanceof User) {
                 return response()->json([
                     'status'  => false,
@@ -181,19 +161,15 @@ class UserAuthController extends Controller
                 ], 403);
             }
 
-            // معالجة رابط الصورة (Google vs Local Storage)
             $avatarUrl = null;
             if ($user->avatar) {
                 if (filter_var($user->avatar, FILTER_VALIDATE_URL)) {
-                    // إذا كان رابط كامل (مثل جوجل)، نستخدمه مباشرة
                     $avatarUrl = $user->avatar;
                 } else {
-                    // إذا كان مسار محلي، ندمجه مع رابط الموقع
                     $avatarUrl = asset('storage/' . $user->avatar);
                 }
             }
 
-            // 🎯 تشكيل البيانات (Data Mapping) لضمان نظافة الـ JSON للفرونت إند
             $data = [
                 'id'                => $user->id,
                 'title'             => $user->title ?? null, // إضافة حقل اللقب
@@ -202,13 +178,8 @@ class UserAuthController extends Controller
                 'phone'             => $user->phone,
                 'city'              => $user->city ?? null, // إرجاع null بدلاً من نص فارغ
 
-                // التأكد من إرجاع مصفوفة حتى لو لم يختر أي اهتمامات لتجنب أخطاء الفرونت إند
                 'charity_interests' => $user->charity_interests ?? [],
-
-                // رابط الصورة المعالج
                 'avatar_url'        => $avatarUrl,
-
-                // تواريخ منسقة
                 'joined_at'         => $user->created_at->format('Y-m-d'), // مثال: 2024-05-12
                 'joined_since'      => $user->created_at->diffForHumans(), // مثال: منذ شهرين
 
@@ -233,7 +204,6 @@ class UserAuthController extends Controller
         try {
             $user = $request->user();
 
-            // 1. حماية التصعيد للتأكد أن صاحب الطلب هو مستخدم عادي
             if (!$user instanceof User) {
                 return response()->json([
                     'status'  => false,
@@ -241,12 +211,10 @@ class UserAuthController extends Controller
                 ], 403, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 2. التحقق من المدخلات
             $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
                 'title'             => 'nullable|string|max:100', // 🎯 إضافة التحقق من اللقب
                 'name'              => 'required|string|min:2|max:255',
                 'email'             => ['required', 'string', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
-                // 🎯 جعلنا الهاتف nullable تحسباً لمستخدمي جوجل
                 'phone'             => ['nullable', 'string', 'max:20', \Illuminate\Validation\Rule::unique('users', 'phone')->ignore($user->id)],
                 'city'              => 'nullable|string|max:255',
                 'charity_interests' => 'nullable|array',
@@ -267,15 +235,12 @@ class UserAuthController extends Controller
                 ], 422, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 3. معالجة تحديث الصورة (وإزالة القديمة)
             $oldAvatar = $user->avatar; // نحفظ المسار القديم قبل التحديث
 
             if ($request->hasFile('avatar')) {
-                // رفع الصورة الجديدة
                 $user->avatar = $request->file('avatar')->store('users/avatars', 'public');
             }
 
-            // 4. تحديث باقي البيانات
             $user->title             = $request->title; // 🎯 تحديث اللقب
             $user->name              = trim($request->name);
             $user->email             = strtolower(trim($request->email));
@@ -285,13 +250,10 @@ class UserAuthController extends Controller
 
             $user->save();
 
-            // 5. التنظيف الذكي (Orphan File Cleanup)
-            // 🎯 تأكدنا أن الصورة القديمة ليست رابط خارجي (مثل جوجل) قبل محاولة حذفها من السيرفر
             if ($request->hasFile('avatar') && $oldAvatar && !filter_var($oldAvatar, FILTER_VALIDATE_URL) && \Illuminate\Support\Facades\Storage::disk('public')->exists($oldAvatar)) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($oldAvatar);
             }
 
-            // 6. تجهيز البيانات للعرض (معالجة رابط جوجل أو مسار السيرفر)
             if ($user->avatar) {
                 $user->avatar_url = filter_var($user->avatar, FILTER_VALIDATE_URL) ? $user->avatar : asset('storage/' . $user->avatar);
             } else {
@@ -314,17 +276,11 @@ class UserAuthController extends Controller
         }
     }
 
-    /**
-     * API: تسجيل الخروج (إلغاء التوكن الحالي)
-     */
     public function logout(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
-
-            // 🛡️ التأكد من الصلاحيات قبل الحذف
             if ($user instanceof User) {
-                // تدمير التوكن الحالي فقط (يسمح له بالبقاء مسجلاً في أجهزة أخرى إن وجدت)
                 $user->currentAccessToken()->delete();
 
                 return response()->json([
@@ -346,15 +302,11 @@ class UserAuthController extends Controller
         }
     }
 
-    /**
-     * API: تغيير كلمة المرور للمستخدم
-     */
     public function updatePassword(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
 
-            // 🛡️ حماية التصعيد للتأكد أن صاحب الطلب هو مستخدم عادي
             if (!$user instanceof User) {
                 return response()->json([
                     'status'  => false,
@@ -362,10 +314,8 @@ class UserAuthController extends Controller
                 ], 403);
             }
 
-            // 1. التحقق من المدخلات بدقة
             $validator = Validator::make($request->all(), [
                 'current_password' => 'required|string',
-                // يجب أن تكون 8 أحرف على الأقل، ومؤكدة، ومختلفة عن كلمة المرور القديمة
                 'new_password'     => 'required|string|min:8|confirmed|different:current_password',
             ], [
                 'current_password.required' => 'يرجى إدخال كلمة المرور الحالية.',
@@ -383,24 +333,18 @@ class UserAuthController extends Controller
                 ], 422);
             }
 
-            // 2. التحقق الأمني: هل كلمة المرور الحالية المدخلة صحيحة؟
             if (!Hash::check($request->current_password, $user->password)) {
                 return response()->json([
                     'status'  => false,
                     'message' => 'كلمة المرور الحالية غير صحيحة. يرجى التأكد والمحاولة مرة أخرى.',
-                    // نرجعها في شكل errors لكي يسهل للفرونت إند إظهارها تحت الحقل مباشرة
                     'errors'  => [
                         'current_password' => ['كلمة المرور الحالية غير صحيحة.']
                     ]
                 ], 400);
             }
 
-            // 3. تحديث وتشفير كلمة المرور الجديدة
             $user->password = Hash::make($request->new_password);
             $user->save();
-
-            // 💡 ملاحظة احترافية: في بعض الأنظمة يتم تدمير التوكن وإجبار المستخدم على تسجيل الدخول مرة أخرى
-            // ولكن لتجربة مستخدم (UX) أفضل، نكتفي بتغيير الباسوورد مع إبقاء الجلسة الحالية نشطة.
 
             return response()->json([
                 'status'  => true,

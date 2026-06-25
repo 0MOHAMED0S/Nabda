@@ -33,22 +33,15 @@ class VolunteerOpportunityController extends Controller
             'contact_phone.required'       => 'رقم هاتف التواصل مطلوب.',
             'status.required'              => 'حالة الفرصة مطلوبة.',
             'status.in'                    => 'حالة الفرصة غير صالحة.',
-
-            // 🎯 رسائل اختيار المتطوعين
             'selected_volunteers.array'    => 'صيغة اختيار المتطوعين غير صحيحة.',
             'selected_volunteers.*.exists' => 'أحد المتطوعين المختارين غير موجود في النظام.',
         ];
     }
 
-    /**
-     * API: جلب قائمة فرص التطوع الخاصة بالمؤسسة (مع الإحصائيات والتفاصيل الكاملة)
-     */
     public function index(Request $request): JsonResponse
     {
         try {
             $foundationId = $request->user()->id;
-
-            // 1. حساب الإحصائيات العلوية (Stats)
             $baseQuery = VolunteerOpportunity::where('foundation_id', $foundationId);
 
             $stats = [
@@ -58,7 +51,6 @@ class VolunteerOpportunityController extends Controller
                 'archived'  => (clone $baseQuery)->where('status', 'cancelled')->count(),
             ];
 
-            // 2. جلب الفرص مع كافة العلاقات والتفاصيل المطلوبة
             $opportunities = VolunteerOpportunity::where('foundation_id', $foundationId)
                 ->with([
                     'foundation:id,name,logo',
@@ -70,7 +62,6 @@ class VolunteerOpportunityController extends Controller
                 ->orderBy('date', 'desc')
                 ->paginate(10);
 
-            // 3. تهيئة الروابط الكاملة للصور (Full URLs)
             $opportunities->getCollection()->transform(function ($opportunity) {
                 if ($opportunity->foundation) {
                     $opportunity->foundation->logo_url = $opportunity->foundation->logo
@@ -98,7 +89,6 @@ class VolunteerOpportunityController extends Controller
                     'opportunities' => $opportunities
                 ]
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Fetch Opportunities Error: " . $e->getMessage());
             return response()->json([
@@ -108,9 +98,6 @@ class VolunteerOpportunityController extends Controller
         }
     }
 
-    /**
-     * API: عرض تفاصيل فرصة تطوعية واحدة (مع كافة التفاصيل والروابط الكاملة لكل الملفات)
-     */
     public function show(Request $request, $id): JsonResponse
     {
         try {
@@ -134,11 +121,15 @@ class VolunteerOpportunityController extends Controller
                 ], 404, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // 🎯 تهيئة الروابط الكاملة للصور والملفات (Full URLs)
             if ($opportunity->foundation) {
                 $foundationFiles = [
-                    'logo', 'cover_image', 'license_image', 'commercial_register',
-                    'tax_card', 'accreditation_letter', 'headquarters_image'
+                    'logo',
+                    'cover_image',
+                    'license_image',
+                    'commercial_register',
+                    'tax_card',
+                    'accreditation_letter',
+                    'headquarters_image'
                 ];
 
                 foreach ($foundationFiles as $field) {
@@ -173,7 +164,6 @@ class VolunteerOpportunityController extends Controller
                 'message' => 'تم جلب تفاصيل الفرصة بنجاح.',
                 'data'    => $opportunity
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Show Opportunity Error ID {$id}: " . $e->getMessage());
             return response()->json([
@@ -183,9 +173,6 @@ class VolunteerOpportunityController extends Controller
         }
     }
 
-    /**
-     * API: إنشاء فرصة تطوعية جديدة (مع إمكانية دعوة متطوعين)
-     */
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -221,8 +208,6 @@ class VolunteerOpportunityController extends Controller
             $data['total_hours'] = $start->diffInHours($end) > 0 ? $start->diffInHours($end) : 1;
 
             $opportunity = VolunteerOpportunity::create($data);
-
-            // 🎯 استخدام 'invited' بدلاً من 'pending' لأن المؤسسة هي من ترسل الدعوة
             if ($request->filled('selected_volunteers') && is_array($request->selected_volunteers)) {
                 $opportunity->volunteers()->attach($request->selected_volunteers, ['status' => 'invited']);
             }
@@ -234,7 +219,6 @@ class VolunteerOpportunityController extends Controller
                 'message' => 'تم إنشاء الفرصة التطوعية بنجاح.',
                 'data'    => $opportunity
             ], 201, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Create Opportunity Error: " . $e->getMessage());
             return response()->json([
@@ -244,9 +228,6 @@ class VolunteerOpportunityController extends Controller
         }
     }
 
-    /**
-     * API: تحديث فرصة تطوعية
-     */
     public function update(Request $request, $id): JsonResponse
     {
         $opportunity = VolunteerOpportunity::where('id', $id)
@@ -293,7 +274,6 @@ class VolunteerOpportunityController extends Controller
 
                 $syncData = [];
                 foreach ($request->selected_volunteers as $vId) {
-                    // 🎯 المتطوع الجديد يعطى 'invited' لأن المؤسسة تدعوه الآن
                     $currentStatus = $existingStatuses[$vId] ?? 'invited';
                     $syncData[$vId] = ['status' => $currentStatus];
                 }
@@ -308,16 +288,12 @@ class VolunteerOpportunityController extends Controller
                 'message' => 'تم تحديث الفرصة بنجاح.',
                 'data'    => $opportunity
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Update Opportunity Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء التحديث.'], 500, [], JSON_UNESCAPED_UNICODE);
         }
     }
 
-    /**
-     * API: حذف فرصة تطوعية
-     */
     public function destroy(Request $request, $id): JsonResponse
     {
         try {
@@ -335,7 +311,6 @@ class VolunteerOpportunityController extends Controller
                 'status'  => true,
                 'message' => 'تم حذف الفرصة التطوعية بنجاح.'
             ], 200, [], JSON_UNESCAPED_UNICODE);
-
         } catch (Exception $e) {
             Log::error("API Delete Opportunity Error: " . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء الحذف.'], 500, [], JSON_UNESCAPED_UNICODE);
