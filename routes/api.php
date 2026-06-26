@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\Foundation\OpportunityApplicationController;
 use App\Http\Controllers\Api\Foundation\OpportunityReportEvaluationController;
 use App\Http\Controllers\Api\Foundation\FoundationDashboardController;
 use App\Http\Controllers\Api\Foundation\FoundationMessageController;
+use App\Http\Controllers\Api\Foundation\FoundationPasswordResetController;
 use App\Http\Controllers\Api\Public\ContactFoundationController;
 use App\Http\Controllers\Api\Public\FoundationRatingController;
 use App\Http\Controllers\Api\Public\PublicCaseController;
@@ -45,7 +46,9 @@ use App\Http\Controllers\Api\Volunteer\VolunteerHoursController;
 use App\Http\Controllers\Api\Volunteer\VolunteerRatingController;
 use App\Http\Controllers\Api\Volunteer\VolunteerDashboardController;
 use App\Http\Controllers\Api\User\UserAuthController;
+use App\Http\Controllers\Api\User\UserPasswordResetController;
 use App\Http\Controllers\Api\Volunteer\ExploreOpportunityController;
+use App\Http\Controllers\Api\Volunteer\VolunteerPasswordResetController;
 
 // Route::get('/user', function (Request $request) {
 //     return $request->user();
@@ -111,6 +114,11 @@ Route::get('/foundations/{id}/contact', [FoundationController::class, 'getContac
 Route::prefix('foundation')->group(function () {
     Route::post('/register', [FoundationAuthController::class, 'register']);
     Route::post('/login', [FoundationAuthController::class, 'login']);
+
+    Route::post('/password/forgot', [FoundationPasswordResetController::class, 'sendCode']);
+    Route::post('/password/verify-code', [FoundationPasswordResetController::class, 'verifyCode']);
+    Route::post('/password/reset', [FoundationPasswordResetController::class, 'resetPassword']);
+
     Route::post('/donate', [DonationController::class, 'store']);
     Route::post('/paymob/callback', [DonationController::class, 'paymobCallback']);
 
@@ -173,6 +181,11 @@ Route::prefix('user')->group(function () {
     Route::post('/auth/google', [GoogleAuthController::class, 'handleGoogleLogin']);
     Route::post('/register', [UserAuthController::class, 'register']);
     Route::post('/login', [UserAuthController::class, 'login']);
+
+    Route::post('/password/forgot', [UserPasswordResetController::class, 'sendCode']);
+    Route::post('/password/verify-code', [UserPasswordResetController::class, 'verifyCode']);
+    Route::post('/password/reset', [UserPasswordResetController::class, 'resetPassword']);
+
     Route::middleware(['auth:sanctum', 'is_user'])->group(function () {
         Route::post('/profile/update', [UserAuthController::class, 'updateProfile']);
         Route::post('/change-password', [UserAuthController::class, 'updatePassword']);
@@ -187,6 +200,9 @@ Route::prefix('user')->group(function () {
 Route::prefix('volunteer')->group(function () {
     Route::post('/register', [VolunteerAuthController::class, 'register']);
     Route::post('/login', [VolunteerAuthController::class, 'login']);
+    Route::post('/password/forgot', [VolunteerPasswordResetController::class, 'sendCode']);
+    Route::post('/password/verify-code', [VolunteerPasswordResetController::class, 'verifyCode']);
+    Route::post('/password/reset', [VolunteerPasswordResetController::class, 'resetPassword']);
     Route::middleware(['auth:sanctum', 'volunteer'])->group(function () {
         Route::post('/logout', [VolunteerAuthController::class, 'logout']);
         Route::post('/change-password', [VolunteerPasswordController::class, 'update']);
